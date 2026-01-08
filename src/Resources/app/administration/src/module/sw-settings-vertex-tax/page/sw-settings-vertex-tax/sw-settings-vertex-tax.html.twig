@@ -1,0 +1,95 @@
+<!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+{% block sw_settings_vertex_tax_index %}
+    <sw-page class="sw-settings-vertex-tax">
+
+        <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+        {% block sw_settings_vertex_tax_search_bar %}
+            <template #search-bar>
+                <sw-search-bar />
+            </template>
+        {% endblock %}
+
+        <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+        {% block sw_settings_vertex_tax_smart_bar_header %}
+            <template #smart-bar-header>
+                <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+                {% block sw_settings_vertex_tax_smart_bar_header_title %}
+                    <h2>
+                        <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+                        {% block sw_settings_vertex_tax_smart_bar_header_title_text %}
+                            {{ $tc('sw-settings.index.title') }}
+                            <sw-icon
+                                    name="regular-chevron-right-xs"
+                                    small
+                            />
+                            {{ $tc('sw-settings-vertex-tax.general.textHeadline') }}
+                        {% endblock %}
+                    </h2>
+                {% endblock %}
+            </template>
+        {% endblock %}
+
+        <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+        {% block sw_settings_vertex_tax_smart_bar_actions %}
+            <template #smart-bar-actions>
+                <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+                {% block sw_settings_vertex_tax_actions_save %}
+                    <sw-button-process
+                            class="sw-settings-vertex-tax__save-action"
+                            :is-loading="isLoading || systemConfigLoading"
+                            :process-success="isSaveSuccessful"
+                            :disabled="isLoading || systemConfigLoading"
+                            variant="primary"
+                            @update:process-success="saveFinish"
+                            @click="onSave"
+                    >
+                        {{ $tc('sw-settings-vertex-tax.general.buttonSave') }}
+                    </sw-button-process>
+                {% endblock %}
+                <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+                {% block sw_settings_vertex_tax_actions_log %}
+                    <sw-button
+                            class="sw-settings-vertex-tax__log-action"
+                            variant="primary"
+                            :is-loading="isLoading"
+                            :disabled="isLoading"
+                            :router-link="{ name: 'sw.vertex.tax.log.module.list' }"
+                    >
+                        {{ $tc('sw-settings-vertex-tax.general.buttonLog') }}
+                    </sw-button>
+                {% endblock %}
+
+                <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+                {% block sw_settings_test_vertex_tax_connection %}
+                    <sw-button
+                            class="sw-settings-vertex-tax-connection__test-action"
+                            variant="primary"
+                            :is-loading="isLoading"
+                            :disabled="isLoading"
+                            @click="testConnection"
+                    >
+                        {{ $tc('sw-settings-vertex-tax.general.testButtonLabel') }}
+                    </sw-button>
+                {% endblock %}
+            </template>
+        {% endblock %}
+
+
+        <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+        {% block sw_settings_vertex_tax_content %}
+            <template #content>
+                <sw-card-view>
+                    <sw-skeleton v-if="isLoading" />
+                    <sw-system-config
+                            v-show="!isLoading"
+                            ref="systemConfig"
+                            sales-channel-switchable
+                            domain="VertexTax.config"
+                            @loading-changed="onLoadingChanged"
+                    />
+                </sw-card-view>
+            </template>
+        {% endblock %}
+    </sw-page>
+{% endblock %}
+

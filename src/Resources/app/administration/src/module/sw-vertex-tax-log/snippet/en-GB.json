@@ -1,0 +1,21 @@
+{
+    "sw-vertex-tax-log": {
+        "list": {
+            "title": "Vertex Tax Logs",
+            "searchBarType": "Vertex Tax Log",
+            "searchBarPlaceholder": "Search logs...",
+            "columnCreatedAt": "Created At",
+            "columnType": "Type",
+            "columnCustomerName": "Customer Name",
+            "columnCustomerEmail": "Customer Email",
+            "columnOrderNumber": "Order Number",
+            "actionView": "View Details"
+        }
+    },
+    "sw-vertex-tax-log-module": {
+        "general": {
+            "mainMenuItemList": "Vertex Tax Logs",
+            "descriptionTextModule": "View Vertex tax calculation and transaction logs"
+        }
+    }
+}

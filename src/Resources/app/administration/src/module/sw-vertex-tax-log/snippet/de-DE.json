@@ -1,0 +1,21 @@
+{
+    "sw-vertex-tax-log": {
+        "list": {
+            "title": "Vertex Tax Protokolle",
+            "searchBarType": "Vertex Tax Protokoll",
+            "searchBarPlaceholder": "Protokolle suchen...",
+            "columnCreatedAt": "Erstellt am",
+            "columnType": "Typ",
+            "columnCustomerName": "Kundenname",
+            "columnCustomerEmail": "Kunden-E-Mail",
+            "columnOrderNumber": "Bestellnummer",
+            "actionView": "Details anzeigen"
+        }
+    },
+    "sw-vertex-tax-log-module": {
+        "general": {
+            "mainMenuItemList": "Vertex Tax Protokolle",
+            "descriptionTextModule": "Vertex Steuerberechnungs- und Transaktionsprotokolle anzeigen"
+        }
+    }
+}

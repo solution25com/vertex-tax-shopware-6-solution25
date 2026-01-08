@@ -1,0 +1,8 @@
+{
+    "sw-override-settings-tax": {
+        "taxProvider": {
+            "cardTitle": "Steuerdienstanbieter"
+        }
+    }
+}
+

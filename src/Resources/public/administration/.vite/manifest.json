@@ -1,0 +1,11 @@
+{
+  "main.js": {
+    "file": "assets/vertex-tax-Ygn7jYVA.js",
+    "name": "vertex-tax",
+    "src": "main.js",
+    "isEntry": true,
+    "css": [
+      "assets/vertex-tax-BiHTm8Eq.css"
+    ]
+  }
+}

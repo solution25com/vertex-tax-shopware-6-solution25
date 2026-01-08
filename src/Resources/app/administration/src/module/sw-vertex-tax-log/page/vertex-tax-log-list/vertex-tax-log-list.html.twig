@@ -1,0 +1,76 @@
+<!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+{% block vertex_tax_log_list %}
+    <sw-page class="vertex-tax-log-list">
+
+        <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+        {% block vertex_tax_log_list_search_bar %}
+            <template #search-bar>
+                <sw-search-bar
+                    :search-type="$tc('sw-vertex-tax-log.list.searchBarType')"
+                    :placeholder="$tc('sw-vertex-tax-log.list.searchBarPlaceholder')"
+                    @search="this.onSearch"
+                />
+            </template>
+        {% endblock %}
+
+        <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+        {% block vertex_tax_log_list_smart_bar_header %}
+            <template #smart-bar-header>
+                <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+                {% block vertex_tax_log_list_smart_bar_header_title %}
+                    <h2>
+                        <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+                        {% block vertex_tax_log_list_smart_bar_header_title_text %}
+                            {{ $tc('sw-vertex-tax-log.list.title') }}
+                        {% endblock %}
+                    </h2>
+                {% endblock %}
+            </template>
+        {% endblock %}
+
+        <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+        {% block vertex_tax_log_list_content %}
+            <template #content>
+                <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+                {% block vertex_tax_log_list_content_card %}
+                    <sw-card-view>
+                        <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+                        {% block vertex_tax_log_list_grid %}
+                            <sw-card
+                                :is-loading="isLoading"
+                                class="vertex-tax-log-list__card"
+                            >
+                                <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+                                {% block vertex_tax_log_list_grid_inner %}
+                                    <sw-data-grid
+                                        :data-source="logs"
+                                        :columns="logColumns"
+                                        :show-actions="true"
+                                        :show-selection="false"
+                                        :is-loading="isLoading"
+                                        @column-sort="onSortColumn"
+                                    >
+                                        <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+                                        {% block vertex_tax_log_list_grid_columns_actions %}
+                                            <template #actions="{ item }">
+                                                <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+                                                {% block vertex_tax_log_list_grid_columns_actions_view %}
+                                                    <sw-context-menu-item
+                                                        :router-link="{ name: 'sw.vertex.tax.log.detail', params: { id: item.id } }"
+                                                    >
+                                                        {{ $tc('sw-vertex-tax-log.list.actionView') }}
+                                                    </sw-context-menu-item>
+                                                {% endblock %}
+                                            </template>
+                                        {% endblock %}
+                                    </sw-data-grid>
+                                {% endblock %}
+                            </sw-card>
+                        {% endblock %}
+                    </sw-card-view>
+                {% endblock %}
+            </template>
+        {% endblock %}
+    </sw-page>
+{% endblock %}
+

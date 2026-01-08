@@ -1,0 +1,29 @@
+{
+    "sw-settings-vertex-tax": {
+        "general": {
+            "textHeadline": "Vertex Tax Konfiguration",
+            "buttonSave": "Speichern",
+            "buttonLog": "Protokolle anzeigen",
+            "testButtonLabel": "Verbindung testen"
+        },
+        "testConnection": {
+            "success": "Verbindung zur Vertex API erfolgreich!",
+            "error": "Verbindung zur Vertex API fehlgeschlagen!",
+            "errorDetail": "Bitte überprüfen Sie die Protokolle für weitere Details."
+        },
+        "validation": {
+            "clientIdRequired": "Client-ID ist erforderlich",
+            "clientSecretRequired": "Client Secret ist erforderlich",
+            "usernameRequired": "Benutzername ist erforderlich",
+            "passwordRequired": "Passwort ist erforderlich",
+            "companyCodeRequired": "Firmencode ist erforderlich",
+            "originStreetRequired": "Herkunftsadresse Straße ist erforderlich",
+            "originCityRequired": "Herkunftsstadt ist erforderlich",
+            "originStateRequired": "Herkunftsstaat Code ist erforderlich",
+            "originStateInvalid": "Herkunftsstaat Code muss 2 Buchstaben sein (z.B. CA für Kalifornien)",
+            "originPostalCodeRequired": "Herkunftspostleitzahl ist erforderlich",
+            "originCountryRequired": "Herkunftsland ist erforderlich"
+        }
+    }
+}
+

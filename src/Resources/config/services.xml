@@ -1,0 +1,89 @@
+<?xml version="1.0" ?>
+<container xmlns="http://symfony.com/schema/dic/services"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:schemaLocation="http://symfony.com/schema/dic/services http://symfony.com/schema/dic/services/services-1.0.xsd">
+    <services>
+        <!-- Entity Definitions -->
+        <service id="VertexTax\Core\Content\TaxProvider\TaxProviderDefinition">
+            <tag name="shopware.entity.definition" entity="vertex_tax_provider"/>
+        </service>
+        <service id="VertexTax\Core\Content\TaxLog\TaxLogDefinition">
+            <tag name="shopware.entity.definition" entity="vertex_tax_log"/>
+        </service>
+        <service id="VertexTax\Core\Content\Extension\TaxExtension">
+            <tag name="shopware.entity.extension"/>
+        </service>
+        <service id="VertexTax\Core\Content\Extension\TaxExtensionDefinition">
+            <tag name="shopware.entity.definition" entity="vertex_tax_mapping" />
+        </service>
+
+        <!-- Cart Processor -->
+        <service id="VertexTax\Core\Checkout\Cart\Collector\VertexTaxCollector">
+            <argument type="service" id="tax.repository" />
+            <argument type="service" id="vertex_tax_provider.repository" />
+            <argument type="service" id="VertexTax\Core\Tax\TaxCalculatorRegistry"/>
+            <tag name="shopware.cart.processor" priority="4500" />
+        </service>
+
+        <!-- Tax Calculator -->
+        <service id="VertexTax\Core\Vertex\Calculator" public="true">
+            <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
+            <argument type="service" id="vertex_tax_log.repository" />
+            <argument type="service" id="product.repository" />
+            <argument type="service" id="cache.object"/>
+            <argument type="service" id="VertexTax\Service\Api\VertexApiClient"/>
+            <argument type="service" id="VertexTax\Service\Builder\VertexTransactionBuilder"/>
+            <argument type="service" id="logger"/>
+            <tag name="vertex.tax_calculator"/>
+        </service>
+
+        <!-- Tax Calculator Registry -->
+        <service id="VertexTax\Core\Tax\TaxCalculatorRegistry">
+            <argument type="tagged_iterator" tag="vertex.tax_calculator"/>
+        </service>
+
+        <!-- API Services -->
+        <service id="VertexTax\Service\Auth\VertexAuthService">
+            <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
+            <argument type="service" id="cache.object"/>
+            <argument type="service" id="logger"/>
+        </service>
+
+        <service id="VertexTax\Service\Api\VertexApiClient">
+            <argument type="service" id="VertexTax\Service\Auth\VertexAuthService"/>
+            <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
+            <argument type="service" id="logger"/>
+        </service>
+
+        <!-- Transaction Builder -->
+        <service id="VertexTax\Service\Builder\VertexTransactionBuilder">
+            <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
+            <argument type="service" id="product.repository" />
+        </service>
+
+        <!-- Address Validator -->
+        <service id="VertexTax\Service\Address\AddressValidatorService">
+            <argument type="service" id="logger"/>
+        </service>
+
+        <!-- Event Subscribers -->
+        <service id="VertexTax\Subscriber\OrderSubscriber">
+            <tag name="kernel.event_subscriber"/>
+            <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
+            <argument type="service" id="vertex_tax_log.repository" />
+            <argument type="service" id="order.repository" />
+            <argument type="service" id="VertexTax\Service\Api\VertexApiClient"/>
+            <argument type="service" id="VertexTax\Service\Builder\VertexTransactionBuilder"/>
+            <argument type="service" id="logger"/>
+        </service>
+
+        <!-- Controllers -->
+        <service id="VertexTax\Storefront\Controller\TestConnectionController" public="true">
+            <argument type="service" id="VertexTax\Service\Api\VertexApiClient"/>
+            <call method="setContainer">
+                <argument type="service" id="service_container"/>
+            </call>
+        </service>
+    </services>
+</container>
+

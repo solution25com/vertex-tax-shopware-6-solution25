@@ -1,0 +1,25 @@
+{
+  "base": "/bundles/vertextax/administration/",
+  "entryPoints": {
+    "vertex-tax": {
+      "css": [
+        "/bundles/vertextax/administration/assets/vertex-tax-BiHTm8Eq.css"
+      ],
+      "dynamic": [],
+      "js": [
+        "/bundles/vertextax/administration/assets/vertex-tax-Ygn7jYVA.js"
+      ],
+      "legacy": false,
+      "preload": []
+    }
+  },
+  "legacy": false,
+  "metadatas": {},
+  "version": [
+    "7.1.0",
+    7,
+    1,
+    0
+  ],
+  "viteServer": null
+}

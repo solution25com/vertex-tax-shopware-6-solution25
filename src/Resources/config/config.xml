@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/shopware/platform/trunk/src/Core/System/SystemConfig/Schema/config.xsd">
+    <card>
+        <title>Vertex Tax Settings</title>
+        <title lang="de-DE">Vertex Tax Einstellungen</title>
+        
+        <input-field type="bool">
+            <name>active</name>
+            <label>Active</label>
+            <label lang="de-DE">Aktiviert</label>
+            <defaultValue>0</defaultValue>
+        </input-field>
+
+        <input-field type="bool">
+            <name>debug</name>
+            <label>Debug Mode</label>
+            <label lang="de-DE">Debug Modus</label>
+            <defaultValue>0</defaultValue>
+        </input-field>
+
+        <input-field type="single-select">
+            <name>environment</name>
+            <label>Environment</label>
+            <label lang="de-DE">Umgebung</label>
+            <options>
+                <option>
+                    <id>production</id>
+                    <name>Production</name>
+                    <name lang="de-DE">Produktion</name>
+                </option>
+                <option>
+                    <id>sandbox</id>
+                    <name>Sandbox</name>
+                    <name lang="de-DE">Sandbox</name>
+                </option>
+            </options>
+            <defaultValue>sandbox</defaultValue>
+            <required>true</required>
+        </input-field>
+
+        <input-field type="text">
+            <name>clientId</name>
+            <label>Client ID</label>
+            <label lang="de-DE">Client ID</label>
+            <required>true</required>
+        </input-field>
+
+        <input-field type="password">
+            <name>clientSecret</name>
+            <label>Client Secret</label>
+            <label lang="de-DE">Client Secret</label>
+            <required>true</required>
+        </input-field>
+
+        <input-field type="text">
+            <name>username</name>
+            <label>Username</label>
+            <label lang="de-DE">Benutzername</label>
+            <required>true</required>
+        </input-field>
+
+        <input-field type="password">
+            <name>password</name>
+            <label>Password</label>
+            <label lang="de-DE">Passwort</label>
+            <required>true</required>
+        </input-field>
+
+        <input-field type="text">
+            <name>companyCode</name>
+            <label>Company Code</label>
+            <label lang="de-DE">Firmencode</label>
+            <defaultValue>DEFAULT</defaultValue>
+            <required>true</required>
+        </input-field>
+
+        <input-field type="text">
+            <name>defaultTaxCode</name>
+            <label>Default Product Tax Code</label>
+            <label lang="de-DE">Standard Produktsteuercode</label>
+            <defaultValue>DEFAULT</defaultValue>
+            <required>true</required>
+        </input-field>
+
+        <input-field type="text">
+            <name>shippingTaxCode</name>
+            <label>Shipping Tax Code</label>
+            <label lang="de-DE">Versandsteuercode</label>
+            <defaultValue>FREIGHT</defaultValue>
+        </input-field>
+
+        <input-field type="single-select">
+            <name>commitFlow</name>
+            <label>Commit Tax Flow</label>
+            <label lang="de-DE">Steuer-Commit-Flow</label>
+            <options>
+                <option>
+                    <id>immediate</id>
+                    <name>Immediate (on order placed)</name>
+                    <name lang="de-DE">Sofort (bei Bestellung)</name>
+                </option>
+                <option>
+                    <id>paid</id>
+                    <name>When order is paid</name>
+                    <name lang="de-DE">Wenn Bestellung bezahlt ist</name>
+                </option>
+                <option>
+                    <id>shipped</id>
+                    <name>When order is shipped</name>
+                    <name lang="de-DE">Wenn Bestellung versandt ist</name>
+                </option>
+            </options>
+            <defaultValue>immediate</defaultValue>
+            <required>true</required>
+        </input-field>
+
+        <input-field type="text">
+            <name>transactionIdPrefix</name>
+            <label>Transaction ID Prefix</label>
+            <label lang="de-DE">Transaktions-ID-Präfix</label>
+            <defaultValue>SW</defaultValue>
+        </input-field>
+
+        <!-- Origin Address (Ship From) -->
+        <input-field type="text">
+            <name>originStreet1</name>
+            <label>Origin Street Address 1</label>
+            <label lang="de-DE">Herkunftsadresse Straße 1</label>
+            <required>true</required>
+        </input-field>
+
+        <input-field type="text">
+            <name>originStreet2</name>
+            <label>Origin Street Address 2</label>
+            <label lang="de-DE">Herkunftsadresse Straße 2</label>
+        </input-field>
+
+        <input-field type="text">
+            <name>originCity</name>
+            <label>Origin City</label>
+            <label lang="de-DE">Herkunftsstadt</label>
+            <required>true</required>
+        </input-field>
+
+        <input-field type="text">
+            <name>originState</name>
+            <label>Origin State Code</label>
+            <label lang="de-DE">Herkunftsstaat Code</label>
+            <placeholder>e.g., CA for California</placeholder>
+            <required>true</required>
+        </input-field>
+
+        <input-field type="text">
+            <name>originPostalCode</name>
+            <label>Origin Postal Code</label>
+            <label lang="de-DE">Herkunftspostleitzahl</label>
+            <required>true</required>
+        </input-field>
+
+        <input-field type="text">
+            <name>originCountry</name>
+            <label>Origin Country Code</label>
+            <label lang="de-DE">Herkunftsland Code</label>
+            <defaultValue>USA</defaultValue>
+            <required>true</required>
+        </input-field>
+
+        <!-- API URLs (optional, defaults provided) -->
+        <input-field type="text">
+            <name>productionApiUrl</name>
+            <label>Production API URL</label>
+            <label lang="de-DE">Produktions-API-URL</label>
+            <defaultValue>https://calcconnect.vertexsmb.com/vertex-ws/v2</defaultValue>
+        </input-field>
+
+        <input-field type="text">
+            <name>productionBaseUrl</name>
+            <label>Production Base URL (for OAuth)</label>
+            <label lang="de-DE">Produktions-Basis-URL (für OAuth)</label>
+            <defaultValue>https://idp.vertexsmb.com</defaultValue>
+        </input-field>
+
+        <input-field type="text">
+            <name>sandboxApiUrl</name>
+            <label>Sandbox API URL</label>
+            <label lang="de-DE">Sandbox-API-URL</label>
+            <defaultValue>https://calcconnect.vertexsmb.com/vertex-ws/v2</defaultValue>
+        </input-field>
+
+        <input-field type="text">
+            <name>sandboxBaseUrl</name>
+            <label>Sandbox Base URL (for OAuth)</label>
+            <label lang="de-DE">Sandbox-Basis-URL (für OAuth)</label>
+            <defaultValue>https://idp.vertexsmb.com</defaultValue>
+        </input-field>
+    </card>
+</config>
+
