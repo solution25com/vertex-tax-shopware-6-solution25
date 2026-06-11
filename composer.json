@@ -1,5 +1,5 @@
 {
-    "name": "vertex/vertex-tax-shopware-6",
+    "name": "solution25/vertex-tax-shopware-6",
     "description": "Vertex O Series REST API v2 integration for Shopware 6.7 - Automated tax calculation and address validation for US market",
     "version": "1.0.0",
     "type": "shopware-platform-plugin",
