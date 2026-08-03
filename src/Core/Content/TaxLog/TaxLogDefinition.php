@@ -7,11 +7,13 @@ namespace VertexTax\Core\Content\TaxLog;
 use Shopware\Core\Checkout\Order\OrderDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityDefinition;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\CreatedAtField;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\DateTimeField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\FkField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\ApiAware;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\PrimaryKey;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\Flag\Required;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\IdField;
+use Shopware\Core\Framework\DataAbstractionLayer\Field\IntField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\LongTextField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\ManyToOneAssociationField;
 use Shopware\Core\Framework\DataAbstractionLayer\Field\StringField;
@@ -46,6 +48,9 @@ class TaxLogDefinition extends EntityDefinition
             (new StringField('customer_email', 'customerEmail'))->addFlags(new ApiAware()),
             (new LongTextField('request_key', 'requestKey'))->addFlags(new ApiAware()),
             (new StringField('type', 'type'))->addFlags(new ApiAware()),
+            (new StringField('request_hash', 'requestHash'))->addFlags(new ApiAware()),
+            (new IntField('occurrence_count', 'occurrenceCount'))->addFlags(new ApiAware()),
+            (new DateTimeField('last_occurred_at', 'lastOccurredAt'))->addFlags(new ApiAware()),
             (new StringField('order_number', 'orderNumber'))->addFlags(new ApiAware()),
             (new FkField('order_id', 'orderId', OrderDefinition::class))->addFlags(new ApiAware()),
             (new ManyToOneAssociationField('order', 'order_id', OrderDefinition::class, 'id'))->addFlags(new ApiAware()),

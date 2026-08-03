@@ -3,11 +3,11 @@
   "entryPoints": {
     "vertex-tax": {
       "css": [
-        "/bundles/vertextax/administration/assets/vertex-tax-BiHTm8Eq.css"
+        "/bundles/vertextax/administration/assets/vertex-tax-B1A6xX3o.css"
       ],
       "dynamic": [],
       "js": [
-        "/bundles/vertextax/administration/assets/vertex-tax-Ygn7jYVA.js"
+        "/bundles/vertextax/administration/assets/vertex-tax-ZdRjTHej.js"
       ],
       "legacy": false,
       "preload": []

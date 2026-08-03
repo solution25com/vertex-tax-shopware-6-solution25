@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace VertexTax\Core\Content\TaxLog;
 
+use Shopware\Core\Checkout\Order\OrderEntity;
 use Shopware\Core\Framework\DataAbstractionLayer\Entity;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityIdTrait;
-use Shopware\Core\Checkout\Order\OrderEntity;
 
 class TaxLogEntity extends Entity
 {
@@ -17,11 +17,14 @@ class TaxLogEntity extends Entity
     protected ?string $customerEmail = null;
     protected ?string $requestKey = null;
     protected ?string $type = null;
+    protected ?string $requestHash = null;
+    protected ?int $occurrenceCount = null;
+    protected ?\DateTimeInterface $lastOccurredAt = null;
     protected ?string $orderNumber = null;
     protected ?string $orderId = null;
     protected ?string $request = null;
     protected ?string $response = null;
-    protected OrderEntity $order;
+    protected ?OrderEntity $order = null;
 
     public function getCustomerName(): ?string
     {
@@ -73,14 +76,34 @@ class TaxLogEntity extends Entity
         $this->type = $type;
     }
 
-    public function getOrder(): OrderEntity
+    public function getRequestHash(): ?string
     {
-        return $this->order;
+        return $this->requestHash;
     }
 
-    public function setOrder(OrderEntity $order): void
+    public function setRequestHash(?string $requestHash): void
     {
-        $this->order = $order;
+        $this->requestHash = $requestHash;
+    }
+
+    public function getOccurrenceCount(): ?int
+    {
+        return $this->occurrenceCount;
+    }
+
+    public function setOccurrenceCount(?int $occurrenceCount): void
+    {
+        $this->occurrenceCount = $occurrenceCount;
+    }
+
+    public function getLastOccurredAt(): ?\DateTimeInterface
+    {
+        return $this->lastOccurredAt;
+    }
+
+    public function setLastOccurredAt(?\DateTimeInterface $lastOccurredAt): void
+    {
+        $this->lastOccurredAt = $lastOccurredAt;
     }
 
     public function getOrderNumber(): ?string
@@ -121,5 +144,15 @@ class TaxLogEntity extends Entity
     public function setResponse(?string $response): void
     {
         $this->response = $response;
+    }
+
+    public function getOrder(): ?OrderEntity
+    {
+        return $this->order;
+    }
+
+    public function setOrder(?OrderEntity $order): void
+    {
+        $this->order = $order;
     }
 }

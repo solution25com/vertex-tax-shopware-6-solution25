@@ -22,14 +22,18 @@
             <argument type="service" id="tax.repository" />
             <argument type="service" id="vertex_tax_provider.repository" />
             <argument type="service" id="VertexTax\Core\Tax\TaxCalculatorRegistry"/>
-            <tag name="shopware.cart.processor" priority="4500" />
+            <tag name="shopware.cart.processor" />
+        </service>
+
+        <service id="VertexTax\Service\Log\TaxLogWriter">
+            <argument type="service" id="vertex_tax_log.repository" />
+            <argument type="service" id="logger"/>
         </service>
 
         <!-- Tax Calculator -->
         <service id="VertexTax\Core\Vertex\Calculator" public="true">
             <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
-            <argument type="service" id="vertex_tax_log.repository" />
-            <argument type="service" id="product.repository" />
+            <argument type="service" id="VertexTax\Service\Log\TaxLogWriter" />
             <argument type="service" id="cache.object"/>
             <argument type="service" id="VertexTax\Service\Api\VertexApiClient"/>
             <argument type="service" id="VertexTax\Service\Builder\VertexTransactionBuilder"/>
@@ -55,14 +59,22 @@
             <argument type="service" id="logger"/>
         </service>
 
+        <!-- Cart Promotion Discount Extractor -->
+        <service id="VertexTax\Service\Cart\CartPromotionDiscountExtractor"/>
+
         <!-- Transaction Builder -->
         <service id="VertexTax\Service\Builder\VertexTransactionBuilder">
             <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
             <argument type="service" id="product.repository" />
+            <argument type="service" id="VertexTax\Service\Cart\CartPromotionDiscountExtractor"/>
         </service>
 
         <!-- Address Validator -->
-        <service id="VertexTax\Service\Address\AddressValidatorService">
+        <service id="VertexTax\Service\Address\AddressValidatorService"/>
+
+        <!-- Delivery State -->
+        <service id="VertexTax\Service\Order\DeliveryStateTransitionService">
+            <argument type="service" id="state_machine.registry"/>
             <argument type="service" id="logger"/>
         </service>
 
@@ -70,10 +82,11 @@
         <service id="VertexTax\Subscriber\OrderSubscriber">
             <tag name="kernel.event_subscriber"/>
             <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
-            <argument type="service" id="vertex_tax_log.repository" />
+            <argument type="service" id="VertexTax\Service\Log\TaxLogWriter" />
             <argument type="service" id="order.repository" />
             <argument type="service" id="VertexTax\Service\Api\VertexApiClient"/>
             <argument type="service" id="VertexTax\Service\Builder\VertexTransactionBuilder"/>
+            <argument type="service" id="VertexTax\Service\Cart\CartPromotionDiscountExtractor"/>
             <argument type="service" id="logger"/>
         </service>
 
@@ -84,6 +97,12 @@
                 <argument type="service" id="service_container"/>
             </call>
         </service>
+
+        <service id="VertexTax\Storefront\Controller\TaxLogAdminController" public="true">
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
+            <call method="setContainer">
+                <argument type="service" id="service_container"/>
+            </call>
+        </service>
     </services>
 </container>
-

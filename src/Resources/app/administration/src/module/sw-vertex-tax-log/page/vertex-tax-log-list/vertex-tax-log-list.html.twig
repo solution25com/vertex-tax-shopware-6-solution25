@@ -29,48 +29,219 @@
         {% endblock %}
 
         <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+        {% block vertex_tax_log_list_smart_bar_actions %}
+            <template #smart-bar-actions>
+                <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+                {% block vertex_tax_log_list_smart_bar_actions_cleanup %}
+                    <sw-button
+                        v-if="acl.can('vertex_tax_log.deleter')"
+                        variant="danger"
+                        :disabled="total === 0 || isLoading"
+                        @click="openCleanupModal"
+                    >
+                        {{ $tc('sw-vertex-tax-log.cleanup.button') }}
+                    </sw-button>
+                {% endblock %}
+            </template>
+        {% endblock %}
+
+        <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
         {% block vertex_tax_log_list_content %}
             <template #content>
                 <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
                 {% block vertex_tax_log_list_content_card %}
-                    <sw-card-view>
+                    <div class="vertex-tax-log-list__content">
                         <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
                         {% block vertex_tax_log_list_grid %}
-                            <sw-card
-                                :is-loading="isLoading"
-                                class="vertex-tax-log-list__card"
-                            >
                                 <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
                                 {% block vertex_tax_log_list_grid_inner %}
                                     <sw-data-grid
+                                        class="vertex-tax-log-list__grid"
+                                        identifier="vertex-tax-log-list"
                                         :data-source="logs"
                                         :columns="logColumns"
-                                        :show-actions="true"
+                                        :show-actions="false"
                                         :show-selection="false"
                                         :is-loading="isLoading"
+                                        :full-page="true"
+                                        :sort-by="sortBy"
+                                        :sort-direction="sortDirection"
                                         @column-sort="onSortColumn"
                                     >
                                         <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
-                                        {% block vertex_tax_log_list_grid_columns_actions %}
-                                            <template #actions="{ item }">
-                                                <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
-                                                {% block vertex_tax_log_list_grid_columns_actions_view %}
-                                                    <sw-context-menu-item
-                                                        :router-link="{ name: 'sw.vertex.tax.log.detail', params: { id: item.id } }"
-                                                    >
-                                                        {{ $tc('sw-vertex-tax-log.list.actionView') }}
-                                                    </sw-context-menu-item>
-                                                {% endblock %}
+                                        {% block vertex_tax_log_list_grid_column_request %}
+                                            <template #column-request="{ item }">
+                                                <sw-button
+                                                    size="small"
+                                                    variant="primary"
+                                                    @click="openJsonModal(item, 'request')"
+                                                >
+                                                    {{ $tc('sw-vertex-tax-log.list.viewButton') }}
+                                                </sw-button>
+                                            </template>
+                                            <template #column-createdAt="{item}">
+                                                {{ formatDate(item.createdAt) }}
+                                            </template>
+                                        {% endblock %}
+
+                                        <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+                                        {% block vertex_tax_log_list_grid_column_response %}
+                                            <template #column-response="{ item }">
+                                                <sw-button
+                                                    size="small"
+                                                    variant="primary"
+                                                    @click="openJsonModal(item, 'response')"
+                                                >
+                                                    {{ $tc('sw-vertex-tax-log.list.viewButton') }}
+                                                </sw-button>
+                                            </template>
+                                        {% endblock %}
+
+                                        <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+                                        {% block vertex_tax_log_list_grid_pagination %}
+                                            <template #pagination>
+                                                <sw-pagination
+                                                    :page="page"
+                                                    :limit="limit"
+                                                    :total="total"
+                                                    :total-visible="7"
+                                                    :steps="[10, 25, 50, 100]"
+                                                    @page-change="onPageChange"
+                                                />
                                             </template>
                                         {% endblock %}
                                     </sw-data-grid>
+
+                                    <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+                                    {% block vertex_tax_log_list_json_modal %}
+                                        <sw-modal
+                                            v-if="showJsonModal"
+                                            :title="jsonModalTitle"
+                                            variant="large"
+                                            @modal-close="closeJsonModal"
+                                        >
+                                            <sw-loader v-if="isModalLoading" />
+                                            <pre
+                                                v-else
+                                                class="vertex-tax-log-list__json-content"
+                                            >{{ jsonModalContent }}</pre>
+
+                                            <template #modal-footer>
+                                                <sw-button
+                                                    variant="primary"
+                                                    @click="copyJsonToClipboard"
+                                                >
+                                                    {{ $tc('sw-vertex-tax-log.list.copyButton') }}
+                                                </sw-button>
+                                                <sw-button
+                                                    @click="closeJsonModal"
+                                                >
+                                                    {{ $tc('sw-vertex-tax-log.list.closeButton') }}
+                                                </sw-button>
+                                            </template>
+                                        </sw-modal>
+                                    {% endblock %}
+
+                                    <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+                                    {% block vertex_tax_log_list_cleanup_modal %}
+                                        <sw-modal
+                                            v-if="showDeleteModal"
+                                            :title="$tc('sw-vertex-tax-log.cleanup.modalTitle')"
+                                            variant="small"
+                                            @modal-close="closeCleanupModal"
+                                        >
+                                            <div class="vertex-tax-log-list__cleanup">
+                                                <sw-single-select
+                                                    v-model:value="cleanupRange"
+                                                    :options="cleanupOptions"
+                                                    :label="$tc('sw-vertex-tax-log.cleanup.rangeLabel')"
+                                                    :isLoading="isCountLoading"
+                                                    :show-clearable-button="false"
+                                                />
+
+                                                <template v-if="isCustomRange">
+                                                    <sw-datepicker
+                                                        v-model:value="cleanupFrom"
+                                                        date-type="datetime"
+                                                        :label="$tc('sw-vertex-tax-log.cleanup.fromLabel')"
+                                                    />
+                                                    <sw-datepicker
+                                                        v-model:value="cleanupTo"
+                                                        date-type="datetime"
+                                                        :label="$tc('sw-vertex-tax-log.cleanup.toLabel')"
+                                                    />
+                                                </template>
+
+                                                <sw-alert
+                                                    v-if="isRemoveAll"
+                                                    variant="warning"
+                                                    :closable="false"
+                                                >
+                                                    {{ $tc('sw-vertex-tax-log.cleanup.removeAllWarning') }}
+                                                </sw-alert>
+
+                                                <p class="vertex-tax-log-list__cleanup-count">
+                                                    <sw-loader v-if="isCountLoading" size="16px" />
+                                                    <template v-else-if="deleteCount !== null">
+                                                        {{ $tc('sw-vertex-tax-log.cleanup.previewCount', deleteCount, { count: deleteCount }) }}
+                                                    </template>
+                                                </p>
+
+                                                <sw-checkbox-field
+                                                    v-if="isRemoveAll"
+                                                    v-model:value="removeAllConfirmed"
+                                                    :label="$tc('sw-vertex-tax-log.cleanup.removeAllConfirm')"
+                                                />
+                                            </div>
+
+                                            <template #modal-footer>
+                                                <sw-button @click="closeCleanupModal">
+                                                    {{ $tc('sw-vertex-tax-log.cleanup.cancelButton') }}
+                                                </sw-button>
+                                                <sw-button
+                                                    variant="danger"
+                                                    :disabled="!canConfirmDelete"
+                                                    :isLoading="isDeleting"
+                                                    @click="confirmDelete"
+                                                >
+                                                    {{ $tc('sw-vertex-tax-log.cleanup.deleteButton') }}
+                                                </sw-button>
+                                            </template>
+                                        </sw-modal>
+                                    {% endblock %}
                                 {% endblock %}
-                            </sw-card>
                         {% endblock %}
-                    </sw-card-view>
+                    </div>
                 {% endblock %}
+            </template>
+        {% endblock %}
+
+        <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+        {% block vertex_tax_log_list_sidebar %}
+            <template #sidebar>
+                <sw-sidebar class="vertex-tax-log-list__sidebar">
+                    <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+                    {% block vertex_tax_log_list_sidebar_refresh %}
+                        <sw-sidebar-item
+                            icon="regular-undo"
+                            :title="$tc('sw-vertex-tax-log.list.titleSidebarItemRefresh')"
+                            @click="onRefresh"
+                        />
+                    {% endblock %}
+
+                    <!-- eslint-disable-next-line sw-deprecation-rules/no-twigjs-blocks -->
+                    {% block vertex_tax_log_list_sidebar_filter %}
+                        <sw-sidebar-filter-panel
+                            entity="vertex_tax_log"
+                            :store-key="storeKey"
+                            :filters="listFilters"
+                            :defaults="defaultFilters"
+                            :active-filter-number="activeFilterNumber"
+                            @criteria-changed="updateCriteria"
+                        />
+                    {% endblock %}
+                </sw-sidebar>
             </template>
         {% endblock %}
     </sw-page>
 {% endblock %}
-

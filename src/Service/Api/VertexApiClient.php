@@ -8,6 +8,7 @@ use Exception;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\Exception\RequestException;
+use Psr\Cache\InvalidArgumentException;
 use Psr\Log\LoggerInterface;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 use VertexTax\Exception\VertexApiException;
@@ -134,46 +135,8 @@ class VertexApiClient
 
                 $this->logRequest($method, $url, $this->sanitizeData($data), $requestId);
 
-                $dummyBody = [
-                "transactionId" => "TEST-" . uniqid(),
-                "saleMessageType" => "QUOTATION",
-                "transactionDate" => date('Y-m-d'),
-                "currencyCode" => "USD",
-                "lines" => [
-                  [
-                    "lineNo" => "1",
-                    "itemCode" => "ITEM001",
-                    "quantity" => 2,
-                    "amount" => 100.00,
-                    "taxCode" => "P0000000"
-                  ],
-                  [
-                    "lineNo" => "2",
-                    "itemCode" => "ITEM002",
-                    "quantity" => 1,
-                    "amount" => 50.00,
-                    "taxCode" => "P0000000"
-                  ]
-                ],
-                "addresses" => [
-                  "shipFrom" => [
-                    "line1" => "123 Warehouse St",
-                    "city" => "Seattle",
-                    "region" => "WA",
-                    "country" => "US",
-                    "postalCode" => "98101"
-                  ],
-                  "shipTo" => [
-                    "line1" => "456 Customer Rd",
-                    "city" => "Portland",
-                    "region" => "OR",
-                    "country" => "US",
-                    "postalCode" => "97201"
-                  ]
-                ]
-                ];
 
-                $response = $this->httpClient->request($method, $url, $dummyBody);
+                $response = $this->httpClient->request($method, $url, $requestOptions);
                 $responseBody = $response->getBody()->getContents();
                 $responseData = json_decode($responseBody, true) ?? [];
 
@@ -209,6 +172,10 @@ class VertexApiClient
                     throw new VertexTimeoutException('Request timeout: ' . $e->getMessage(), 0, $e);
                 }
                 throw new VertexApiException('API request failed: ' . $e->getMessage(), 0, $e);
+            } catch (InvalidArgumentException $e) {
+                if ($e->getCode() === CURLE_OPERATION_TIMEOUTED) {
+                    throw new VertexTimeoutException('Request timeout: ' . $e->getMessage(), 0, $e);
+                }
             }
         }
 

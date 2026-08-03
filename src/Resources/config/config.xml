@@ -19,6 +19,21 @@
             <defaultValue>0</defaultValue>
         </input-field>
 
+        <input-field type="bool">
+            <name>simulateVertexFailure</name>
+            <label>Test: force Vertex tax failure (skips live API, uses fallback)</label>
+            <label lang="de-DE">Test: Vertex-Steuerfehler erzwingen (keine Live-API, nutzt Fallback)</label>
+            <defaultValue>0</defaultValue>
+        </input-field>
+
+        <input-field type="float">
+            <name>fallbackTaxRate</name>
+            <label>Fallback tax rate (%) if Vertex is unavailable or fails</label>
+            <label lang="de-DE">Fallback-Steuersatz (%) falls Vertex fehlschlägt</label>
+            <defaultValue>0</defaultValue>
+            <placeholder>0 to 100</placeholder>
+        </input-field>
+
         <input-field type="single-select">
             <name>environment</name>
             <label>Environment</label>

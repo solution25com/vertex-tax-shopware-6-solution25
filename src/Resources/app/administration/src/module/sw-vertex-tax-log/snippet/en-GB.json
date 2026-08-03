@@ -9,7 +9,54 @@
             "columnCustomerName": "Customer Name",
             "columnCustomerEmail": "Customer Email",
             "columnOrderNumber": "Order Number",
-            "actionView": "View Details"
+            "columnRequest": "Request",
+            "columnResponse": "Response",
+            "actionView": "View Details",
+            "viewButton": "View",
+            "copyButton": "Copy to Clipboard",
+            "closeButton": "Close",
+            "copySuccess": "Copied to clipboard successfully",
+            "titleSidebarItemRefresh": "Refresh"
+        },
+        "cleanup": {
+            "button": "Clean up logs",
+            "modalTitle": "Clean up tax logs",
+            "rangeLabel": "Delete logs",
+            "range30d": "Older than 30 days",
+            "range3m": "Older than 3 months",
+            "range6m": "Older than 6 months",
+            "rangeCustom": "Custom date range",
+            "rangeAll": "Remove all logs",
+            "fromLabel": "From",
+            "toLabel": "To",
+            "removeAllWarning": "This will permanently delete every tax log entry. This cannot be undone.",
+            "removeAllConfirm": "Yes, delete all tax logs",
+            "previewCount": "{count} log will be deleted | {count} logs will be deleted",
+            "cancelButton": "Cancel",
+            "deleteButton": "Delete",
+            "deleteSuccess": "{count} log deleted successfully | {count} logs deleted successfully",
+            "deleteError": "Failed to delete logs"
+        },
+        "filters": {
+            "typeFilter": {
+                "label": "Type",
+                "placeholder": "Filter by type..."
+            },
+            "orderNumberFilter": {
+                "label": "Order number",
+                "placeholder": "Filter by order number..."
+            },
+            "customerNameFilter": {
+                "label": "Customer name",
+                "placeholder": "Filter by customer name..."
+            },
+            "customerEmailFilter": {
+                "label": "Customer email",
+                "placeholder": "Filter by customer email..."
+            },
+            "createdAtFilter": {
+                "label": "Created at"
+            }
         }
     },
     "sw-vertex-tax-log-module": {

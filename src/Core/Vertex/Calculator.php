@@ -8,22 +8,26 @@ use Psr\Cache\CacheItemPoolInterface;
 use Psr\Cache\InvalidArgumentException;
 use Psr\Log\LoggerInterface;
 use Shopware\Core\Checkout\Cart\Cart;
+use Shopware\Core\Checkout\Cart\LineItem\LineItem;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
 use VertexTax\Core\Tax\TaxCalculatorInterface;
 use VertexTax\Exception\VertexApiException;
+use VertexTax\Exception\VertexAuthenticationException;
+use VertexTax\Exception\VertexServerException;
+use VertexTax\Exception\VertexTimeoutException;
+use VertexTax\Exception\VertexValidationException;
 use VertexTax\Service\Api\VertexApiClient;
 use VertexTax\Service\Builder\VertexTransactionBuilder;
+use VertexTax\Service\Log\TaxLogWriter;
 
 class Calculator implements TaxCalculatorInterface
 {
     private const CACHE_ID_PREFIX = 'vertex_tax_response_';
 
     private SystemConfigService $systemConfigService;
-    private EntityRepository $taxLogRepository;
-    /* @phpstan-ignore-next-line */
-    private EntityRepository $productRepository;
+    private TaxLogWriter $taxLogWriter;
     private CacheItemPoolInterface $cache;
     private VertexApiClient $apiClient;
     private VertexTransactionBuilder $transactionBuilder;
@@ -32,16 +36,14 @@ class Calculator implements TaxCalculatorInterface
 
     public function __construct(
         SystemConfigService $systemConfigService,
-        EntityRepository $taxLogRepository,
-        EntityRepository $productRepository,
+        TaxLogWriter $taxLogWriter,
         CacheItemPoolInterface $cache,
         VertexApiClient $apiClient,
         VertexTransactionBuilder $transactionBuilder,
         LoggerInterface $logger
     ) {
         $this->systemConfigService = $systemConfigService;
-        $this->taxLogRepository = $taxLogRepository;
-        $this->productRepository = $productRepository;
+        $this->taxLogWriter = $taxLogWriter;
         $this->cache = $cache;
         $this->apiClient = $apiClient;
         $this->transactionBuilder = $transactionBuilder;
@@ -75,15 +77,31 @@ class Calculator implements TaxCalculatorInterface
             return [];
         }
 
+        if ($this->isSimulateVertexFailure()) {
+            return $this->buildFallbackTaxResult(
+                $lineItems,
+                $original,
+                'simulated_failure'
+            );
+        }
+
         try {
-//            $transactionRequest = $this->transactionBuilder->buildFromCart($original, $context, 'Quotation');
-            $transactionRequest = $this->transactionBuilder->buildVertexDummyData();
+            $transactionRequest = $this->transactionBuilder->buildFromCart($original, $context, 'QUOTATION');
 
             $cacheKey = $this->getCacheKey($transactionRequest);
             $cachedResponse = $this->getResponseFromCache($cacheKey);
 
             if ($cachedResponse !== null) {
-                return $this->processResponse($cachedResponse, $lineItems, $original);
+                $fromCache = $this->processResponse($cachedResponse, $lineItems, $original);
+                if (empty($fromCache)) {
+                    return $this->buildFallbackTaxResult(
+                        $lineItems,
+                        $original,
+                        'invalid_vertex_response'
+                    );
+                }
+
+                return $fromCache;
             }
 
             $response = $this->apiClient->post('supplies', $transactionRequest);
@@ -96,7 +114,12 @@ class Calculator implements TaxCalculatorInterface
 
             $result = $this->processResponse($response, $lineItems, $original);
 
-            if (!empty($result)) {
+            if (empty($result)) {
+                return $this->buildFallbackTaxResult(
+                    $lineItems,
+                    $original,
+                    'invalid_vertex_response'
+                );
             }
 
             return $result;
@@ -106,14 +129,22 @@ class Calculator implements TaxCalculatorInterface
                 'code' => $e->getCode(),
             ]);
 
-            return [];
+            return $this->buildFallbackTaxResult(
+                $lineItems,
+                $original,
+                $this->getErrorLabelFromException($e)
+            );
         } catch (\Exception $e) {
             $this->logger->error('Vertex Tax Calculation Unexpected Error', [
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            return [];
+            return $this->buildFallbackTaxResult(
+                $lineItems,
+                $original,
+                'unexpected_error'
+            );
         }
     }
 
@@ -128,31 +159,30 @@ class Calculator implements TaxCalculatorInterface
     {
         $processedResponse = [];
 
-        $transaction = $response['data']['transaction'] ?? $response['transaction'] ?? null;
+        $transaction = $response['data'] ?? null;
 
         if (!$transaction) {
             $this->logger->warning('Vertex API: Invalid response structure', ['response' => $response]);
             return $processedResponse;
         }
 
-        $lineItemTaxes = $transaction['lineItems'] ?? [];
-        $overallTaxes = $transaction['taxes'] ?? [];
+        $lineItemTaxes = $transaction['lineItems'] ?? $transaction['LineItems'] ?? [];
+        $overallTaxes = $transaction['taxes'] ?? $transaction['Taxes'] ?? [];
 
         foreach ($lineItemTaxes as $vertexLineItem) {
-            $lineItemId = $vertexLineItem['lineItemId'] ?? null;
+            $lineItemId = $vertexLineItem['lineItemId'] ?? $vertexLineItem['LineItemId'] ?? null;
             if (!$lineItemId || $lineItemId === 'shipping') {
                 continue;
             }
 
             $totalTax = 0;
 
-            if (isset($vertexLineItem['taxes']) && is_array($vertexLineItem['taxes'])) {
-                foreach ($vertexLineItem['taxes'] as $tax) {
-                    $totalTax += (float)($tax['calculatedTax'] ?? $tax['tax'] ?? $tax['amount'] ?? 0);
-                }
-            } elseif (isset($vertexLineItem['totalTax'])) {
-                $totalTax = (float)$vertexLineItem['totalTax'];
+            $lineItemTaxList = $vertexLineItem['taxes'] ?? $vertexLineItem['Taxes'] ?? [];
+            foreach ($lineItemTaxList as $tax) {
+                $totalTax += (float)($tax['calculatedTax'] ?? $tax['CalculatedTax'] ?? $tax['tax'] ?? $tax['amount'] ?? 0);
             }
+
+            $totalTax = round($totalTax, 2, PHP_ROUND_HALF_UP);
 
             foreach ($lineItems as $shopwareLineItem) {
                 $productId = $shopwareLineItem['id'] ?? null;
@@ -165,13 +195,11 @@ class Calculator implements TaxCalculatorInterface
 
         $shippingTax = 0;
         foreach ($lineItemTaxes as $vertexLineItem) {
-            if (($vertexLineItem['lineItemId'] ?? '') === 'shipping') {
-                if (isset($vertexLineItem['taxes']) && is_array($vertexLineItem['taxes'])) {
-                    foreach ($vertexLineItem['taxes'] as $tax) {
-                        $shippingTax += (float)($tax['calculatedTax'] ?? $tax['tax'] ?? $tax['amount'] ?? 0);
-                    }
-                } elseif (isset($vertexLineItem['totalTax'])) {
-                    $shippingTax = (float)$vertexLineItem['totalTax'];
+            $lineItemId = $vertexLineItem['lineItemId'] ?? $vertexLineItem['LineItemId'] ?? '';
+            if ($lineItemId === 'shipping') {
+                $lineItemTaxList = $vertexLineItem['taxes'] ?? $vertexLineItem['Taxes'] ?? [];
+                foreach ($lineItemTaxList as $tax) {
+                    $shippingTax += (float)($tax['calculatedTax'] ?? $tax['CalculatedTax'] ?? $tax['tax'] ?? $tax['amount'] ?? 0);
                 }
                 break;
             }
@@ -185,6 +213,8 @@ class Calculator implements TaxCalculatorInterface
             }
         }
 
+        $shippingTax = round($shippingTax, 2, PHP_ROUND_HALF_UP);
+
         if ($shippingTax > 0) {
             $processedResponse['shippingTax'] = $shippingTax;
         }
@@ -194,10 +224,14 @@ class Calculator implements TaxCalculatorInterface
         }, ARRAY_FILTER_USE_KEY));
 
         $totalTax += $processedResponse['shippingTax'] ?? 0;
+        $totalTax = round($totalTax, 2, PHP_ROUND_HALF_UP);
 
-        $totalAmount = $cart->getPrice()->getTotalPrice();
-        if ($totalAmount > 0 && $totalTax > 0) {
-            $processedResponse['rate'] = $totalTax / $totalAmount;
+        $taxableBase = (float) ($transaction['subTotal'] ?? $transaction['SubTotal'] ?? 0.0);
+        if ($taxableBase <= 0.0) {
+            $taxableBase = $cart->getPrice()->getTotalPrice();
+        }
+        if ($taxableBase > 0 && $totalTax > 0) {
+            $processedResponse['rate'] = $totalTax / $taxableBase;
         }
 
         return $processedResponse;
@@ -221,6 +255,123 @@ class Calculator implements TaxCalculatorInterface
     private function isDebugMode(): bool
     {
         return (bool)$this->systemConfigService->get('VertexTax.config.debug', $this->salesChannelId);
+    }
+
+    private function isSimulateVertexFailure(): bool
+    {
+        return (bool)$this->systemConfigService->get('VertexTax.config.simulateVertexFailure', $this->salesChannelId);
+    }
+
+    private function getFallbackTaxRatePercent(): float
+    {
+        $value = $this->systemConfigService->get('VertexTax.config.fallbackTaxRate', $this->salesChannelId);
+        if ($value === null || $value === '') {
+            return 0.0;
+        }
+        $float = (float)$value;
+        if ($float < 0.0) {
+            return 0.0;
+        }
+        if ($float > 100.0) {
+            return 100.0;
+        }
+
+        return $float;
+    }
+
+    /**
+     * Apply shop-configured tax rate to net (gross minus current tax) per line and shipping.
+     *
+     * @param array $lineItems Request rows as built for Vertex (id = product line reference id)
+     * @return array same shape as processResponse plus vertex_fallback, vertex_error
+     */
+    private function buildFallbackTaxResult(array $lineItems, Cart $original, string $errorReason): array
+    {
+        $percent = $this->getFallbackTaxRatePercent();
+        $out = [
+            'vertex_fallback' => true,
+            'vertex_error' => $this->shortenErrorReason($errorReason),
+        ];
+
+        $refIds = [];
+        foreach ($lineItems as $row) {
+            if (!empty($row['id'])) {
+                $refIds[] = (string) $row['id'];
+            }
+        }
+        $refIds = array_unique($refIds, SORT_STRING);
+        if ($refIds === []) {
+            return $out;
+        }
+
+        $totalTax = 0.0;
+
+        foreach ($original->getLineItems()->getElements() as $line) {
+            if ($line->getType() !== LineItem::PRODUCT_LINE_ITEM_TYPE) {
+                continue;
+            }
+            $refId = (string) $line->getReferencedId();
+            if (!\in_array($refId, $refIds, true)) {
+                continue;
+            }
+
+            $gross = $line->getPrice()->getTotalPrice();
+            $oldTax = 0.0;
+            foreach ($line->getPrice()->getCalculatedTaxes() as $t) {
+                $oldTax += $t->getTax();
+            }
+            $net = $gross - $oldTax;
+            $newTax = \round(\max(0.0, $net * ($percent / 100.0)), 2);
+            $out[$refId] = $newTax;
+            $totalTax += $newTax;
+        }
+
+        $shipping = $original->getShippingCosts();
+        $grossS = $shipping->getTotalPrice();
+        $oldS = 0.0;
+        foreach ($shipping->getCalculatedTaxes() as $t) {
+            $oldS += $t->getTax();
+        }
+        $netS = $grossS - $oldS;
+        $st = \round(\max(0.0, $netS * ($percent / 100.0)), 2);
+        $out['shippingTax'] = $st;
+        $totalTax += $st;
+
+        $out['display_tax_rate_percent'] = $percent;
+        $out['rate'] = $percent / 100.0;
+
+        return $out;
+    }
+
+    private function getErrorLabelFromException(VertexApiException $e): string
+    {
+        if ($e instanceof VertexTimeoutException) {
+            return 'timeout';
+        }
+        if ($e instanceof VertexAuthenticationException) {
+            return 'authentication';
+        }
+        if ($e instanceof VertexServerException) {
+            return 'server_error';
+        }
+        if ($e instanceof VertexValidationException) {
+            return 'validation';
+        }
+
+        return 'api_error';
+    }
+
+    private function shortenErrorReason(string $errorReason): string
+    {
+        $trimmed = \trim($errorReason);
+        if ($trimmed === '') {
+            return 'unknown';
+        }
+        if (\strlen($trimmed) > 120) {
+            return \substr($trimmed, 0, 120);
+        }
+
+        return $trimmed;
     }
 
     /**
@@ -290,16 +441,10 @@ class Calculator implements TaxCalculatorInterface
             'request' => json_encode($request),
             'response' => json_encode($response),
             'type' => 'Tax Calculation',
-            'orderNumber' => '',
-            'orderId' => '',
+            'orderNumber' => null,
+            'orderId' => null,
         ];
 
-        try {
-            $this->taxLogRepository->create([$logData], $context->getContext());
-        } catch (\Exception $e) {
-            $this->logger->error('Failed to log Vertex tax request', [
-                'error' => $e->getMessage(),
-            ]);
-        }
+        $this->taxLogWriter->write($logData, $context->getContext());
     }
 }

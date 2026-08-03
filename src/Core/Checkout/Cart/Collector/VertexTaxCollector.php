@@ -9,6 +9,8 @@ use Shopware\Core\Checkout\Cart\CartBehavior;
 use Shopware\Core\Checkout\Cart\CartProcessorInterface;
 use Shopware\Core\Checkout\Cart\LineItem\CartDataCollection;
 use Shopware\Core\Checkout\Cart\LineItem\LineItem;
+use Shopware\Core\Checkout\Cart\Price\Struct\CalculatedPrice;
+use Shopware\Core\Checkout\Cart\Tax\Struct\CalculatedTax;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
@@ -86,68 +88,57 @@ class VertexTaxCollector implements CartProcessorInterface
                 $this->addRateToCart($lineItemsTax, $toCalculate);
 
                 if (!empty($lineItemsTax)) {
-                    $shippingTaxFromServiceProvider = 0;
-                    $methodTaxAmount = 0;
+                    $isVertexFallback = !empty($lineItemsTax['vertex_fallback']);
 
-                    if (!empty($lineItemsTax['shippingTax'])) {
-                        $shippingTaxFromServiceProvider = $lineItemsTax['shippingTax'];
+                    $displayRate = null;
+                    if ($isVertexFallback) {
+                        $displayRate = (float) number_format((float) ($lineItemsTax['display_tax_rate_percent'] ?? 0.0), 2, '.', '');
+                    } elseif (isset($lineItemsTax['rate'])) {
+                        $displayRate = (float) number_format((float) $lineItemsTax['rate'] * 100, 2, '.', '');
                     }
 
-                    $shippingMethodCalculatedTax = $original->getShippingCosts()->getCalculatedTaxes();
-                    foreach ($shippingMethodCalculatedTax as $methodCalculatedTax) {
-                        $methodTaxAmount += $methodCalculatedTax->getTax();
-                    }
+                    $shippingTaxToFold = \array_key_exists('shippingTax', $lineItemsTax)
+                        ? (float) $lineItemsTax['shippingTax']
+                        : 0.0;
 
                     foreach ($products as $product) {
                         $productId = $product->getReferencedId();
-                        if (!empty($lineItemsTax[$productId])) {
-                            $calculatedTaxes = $product->getPrice()->getCalculatedTaxes();
-                            foreach ($calculatedTaxes as $calculatedTax) {
-                                $taxAmount = $lineItemsTax[$productId];
-
-                                if ($shippingTaxFromServiceProvider) {
-                                    $taxAmount += $shippingTaxFromServiceProvider - $methodTaxAmount;
-                                    $shippingTaxFromServiceProvider = 0;
-                                }
-
-                                $calculatedTax->setTax($taxAmount);
-
-                                if (isset($lineItemsTax['rate'])) {
-                                    $calculatedTax->assign([
-                                        'taxRate' => (float)number_format(
-                                            (float)$lineItemsTax['rate'] * 100,
-                                            2,
-                                            '.',
-                                            ''
-                                        ),
-                                    ]);
-                                }
-                            }
-
-                            $product->setPayloadValue('vertex_tax_calculated', true);
+                        if (!\is_string($productId)) {
+                            continue;
                         }
-                    }
+                        if (!\array_key_exists($productId, $lineItemsTax)) {
+                            continue;
+                        }
 
-                    if (!empty($lineItemsTax['shippingTax'])) {
-                        $shippingCalculatedTaxes = $toCalculate->getShippingCosts()->getCalculatedTaxes();
+                        if ($isVertexFallback) {
+                            $product->setPayloadValue('vertex_tax_calculated', false);
+                            $product->setPayloadValue('vertex_fallback_used', true);
+                            $product->setPayloadValue('vertex_error', (string) ($lineItemsTax['vertex_error'] ?? ''));
+                        } else {
+                            $product->setPayloadValue('vertex_tax_calculated', true);
+                            $product->setPayloadValue('vertex_fallback_used', false);
+                            $product->setPayloadValue('vertex_error', '');
+                        }
 
-                        $shippingCalculatedTaxes->clear();
+                        $productTax = (float) $lineItemsTax[$productId];
+                        if ($shippingTaxToFold !== 0.0) {
+                            $productTax += $shippingTaxToFold;
+                            $shippingTaxToFold = 0.0;
+                        }
 
-                        $taxRate = isset($lineItemsTax['rate'])
-                            ? (float)number_format((float)$lineItemsTax['rate'] * 100, 2, '.', '')
-                            : 0.0;
-
-                        $shippingCalculatedTaxes->add(
-                            new \Shopware\Core\Checkout\Cart\Tax\Struct\CalculatedTax(
-                                (float)$lineItemsTax['shippingTax'],
-                                $taxRate,
-                                $toCalculate->getShippingCosts()->getTotalPrice()
-                            )
-                        );
+                        $rate = $displayRate ?? ($product->getPrice()->getCalculatedTaxes()->first()?->getTaxRate() ?? 0.0);
+                        $this->applyBlendedTax($product->getPrice(), $productTax, $rate);
                     }
                 }
             }
         }
+    }
+
+    private function applyBlendedTax(CalculatedPrice $price, float $tax, float $rate): void
+    {
+        $taxes = $price->getCalculatedTaxes();
+        $taxes->clear();
+        $taxes->add(new CalculatedTax($tax, $rate, $price->getTotalPrice()));
     }
 
     private function getTaxProviderClass(string $taxRuleId, array $taxRules, array $taxProviders)

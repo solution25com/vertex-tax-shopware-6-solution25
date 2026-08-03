@@ -9,7 +9,54 @@
             "columnCustomerName": "Kundenname",
             "columnCustomerEmail": "Kunden-E-Mail",
             "columnOrderNumber": "Bestellnummer",
-            "actionView": "Details anzeigen"
+            "columnRequest": "Anfrage",
+            "columnResponse": "Antwort",
+            "actionView": "Details anzeigen",
+            "viewButton": "Anzeigen",
+            "copyButton": "In Zwischenablage kopieren",
+            "closeButton": "Schließen",
+            "copySuccess": "Erfolgreich in die Zwischenablage kopiert",
+            "titleSidebarItemRefresh": "Aktualisieren"
+        },
+        "cleanup": {
+            "button": "Protokolle bereinigen",
+            "modalTitle": "Steuerprotokolle bereinigen",
+            "rangeLabel": "Protokolle löschen",
+            "range30d": "Älter als 30 Tage",
+            "range3m": "Älter als 3 Monate",
+            "range6m": "Älter als 6 Monate",
+            "rangeCustom": "Benutzerdefinierter Zeitraum",
+            "rangeAll": "Alle Protokolle entfernen",
+            "fromLabel": "Von",
+            "toLabel": "Bis",
+            "removeAllWarning": "Dadurch werden alle Steuerprotokolle unwiderruflich gelöscht. Dies kann nicht rückgängig gemacht werden.",
+            "removeAllConfirm": "Ja, alle Steuerprotokolle löschen",
+            "previewCount": "{count} Protokoll wird gelöscht | {count} Protokolle werden gelöscht",
+            "cancelButton": "Abbrechen",
+            "deleteButton": "Löschen",
+            "deleteSuccess": "{count} Protokoll erfolgreich gelöscht | {count} Protokolle erfolgreich gelöscht",
+            "deleteError": "Protokolle konnten nicht gelöscht werden"
+        },
+        "filters": {
+            "typeFilter": {
+                "label": "Typ",
+                "placeholder": "Nach Typ filtern..."
+            },
+            "orderNumberFilter": {
+                "label": "Bestellnummer",
+                "placeholder": "Nach Bestellnummer filtern..."
+            },
+            "customerNameFilter": {
+                "label": "Kundenname",
+                "placeholder": "Nach Kundenname filtern..."
+            },
+            "customerEmailFilter": {
+                "label": "Kunden-E-Mail",
+                "placeholder": "Nach Kunden-E-Mail filtern..."
+            },
+            "createdAtFilter": {
+                "label": "Erstellt am"
+            }
         }
     },
     "sw-vertex-tax-log-module": {

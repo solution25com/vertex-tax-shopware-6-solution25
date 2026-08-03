@@ -1,7 +1,7 @@
 {
     "name": "solution25/vertex-tax-shopware-6",
-    "description": "Vertex O Series REST API v2 integration for Shopware 6.7 - Automated tax calculation and address validation for US market",
-    "version": "1.0.0",
+    "description": "Vertex O Series REST API v2 integration for Shopware 6.7 that enables real-time US sales tax calculation, shipping tax handling, and address validation in checkout and order flows.",
+    "version": "1.1.0",
     "type": "shopware-platform-plugin",
     "license": "MIT",
     "authors": [
@@ -10,7 +10,11 @@
         }
     ],
     "require": {
-        "shopware/core": "^6.7.0"
+        "shopware/core": "^6.7.0",
+        "shopware/storefront": "^6.7.0"
+    },
+    "require-dev": {
+        "squizlabs/php_codesniffer": "^4.0"
     },
     "extra": {
         "shopware-plugin-class": "VertexTax\\VertexTax",
@@ -19,8 +23,8 @@
             "en-GB": "Vertex Tax Integration for Shopware 6"
         },
         "description": {
-            "de-DE": "Vertex O Series REST API v2 für Shopware 6.7: Automatisierte Steuerberechnung sowie Adressvalidierung für den US-Markt. Die optimale Lösung für rechtssichere US-Compliance.",
-            "en-GB": "Vertex O Series REST API v2 for Shopware 6.7: Automated tax calculation and address validation for the US market. The seamless solution for your global sales compliance."
+            "de-DE": "Vertex O Series REST API v2 Integration für Shopware 6.7 mit Echtzeit-Steuerberechnung für den US-Markt, Versandsteuer-Handling und Adressvalidierung im Checkout- und Bestellprozess.",
+            "en-GB": "Vertex O Series REST API v2 integration for Shopware 6.7 that provides real-time US sales tax calculation, shipping tax handling, and address validation across checkout and order flows."
         },
         "manufacturerLink": {
             "de-DE": "https://www.vertexinc.com/",
@@ -35,13 +39,6 @@
         "psr-4": {
             "VertexTax\\": "src/"
         }
-    },
-    "require-dev": {
-        "squizlabs/php_codesniffer": "^4.0"
-    },
-    "config": {
-        "allow-plugins": {
-            "symfony/runtime": false
-        }
     }
 }
+

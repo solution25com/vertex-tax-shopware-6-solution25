@@ -11,21 +11,26 @@ use Shopware\Core\Checkout\Customer\CustomerEntity;
 use Shopware\Core\Content\Product\ProductEntity;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
+use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SalesChannel\SalesChannelContext;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
+use VertexTax\Service\Cart\CartPromotionDiscountExtractor;
 
 class VertexTransactionBuilder
 {
     private SystemConfigService $systemConfigService;
     private EntityRepository $productRepository;
+    private CartPromotionDiscountExtractor $discountExtractor;
     private ?string $salesChannelId = null;
 
     public function __construct(
         SystemConfigService $systemConfigService,
-        EntityRepository $productRepository
+        EntityRepository $productRepository,
+        CartPromotionDiscountExtractor $discountExtractor
     ) {
         $this->systemConfigService = $systemConfigService;
         $this->productRepository = $productRepository;
+        $this->discountExtractor = $discountExtractor;
     }
 
     public function setSalesChannelId(?string $salesChannelId): void
@@ -49,9 +54,8 @@ class VertexTransactionBuilder
         }
 
         return [
-            'SaleMessageType' => 'Quotation',
+            'SaleMessageType' => 'QUOTATION',
             'TransactionId' => 'SW_TEST_' . time(),
-            'TransactionDate' => date('Y-m-d'),
             'Currency' => 'USD',
             'CompanyCode' => $companyCode,
             'Seller' => [
@@ -96,7 +100,7 @@ class VertexTransactionBuilder
      * @param string $messageType
      * @return array
      */
-    public function buildFromCart(Cart $cart, SalesChannelContext $context, string $messageType = 'Quotation'): array
+    public function buildFromCart(Cart $cart, SalesChannelContext $context, string $messageType): array
     {
         $this->salesChannelId = $context->getSalesChannelId();
 
@@ -111,23 +115,27 @@ class VertexTransactionBuilder
         $transaction = [
             'saleMessageType' => $messageType,
             'transactionId' => $this->generateTransactionId($cart, $context),
-            'transactionDate' => (new \DateTime())->format('Y-m-d'),
-            'currency' => $context->getCurrency()->getIsoCode(),
-            'companyCode' => $this->getCompanyCode(),
+            'documentNumber' => Uuid::randomHex(),
+            'documentDate' => date('Y-m-d'),
+            'transactionType' => 'SALE',
+            'seller' => [
+                'company' => $this->getCompanyCode(),
+            ],
         ];
 
         if ($customer) {
-            $transaction['customer'] = $this->buildCustomerData($customer, $billingAddress);
+            $transaction['customer'] = $this->buildCustomerData($customer, $billingAddress, $shippingAddress);
+        } else {
+            $transaction['customer'] = [
+                'destination' => $this->buildDestinationAddress($shippingAddress),
+            ];
         }
 
         $transaction['lineItems'] = $this->buildLineItems($cart, $context);
 
-        $transaction['origin'] = $this->buildOriginAddress();
-
-        $transaction['destination'] = $this->buildDestinationAddress($shippingAddress);
-
-        if ($cart->getShippingCosts()->getTotalPrice() > 0) {
-            $transaction['lineItems'][] = $this->buildShippingLineItem($cart);
+        $shippingTotal = $cart->getShippingCosts()->getTotalPrice();
+        if ($shippingTotal > 0) {
+            $transaction['lineItems'][] = $this->buildShippingLineItem($cart, $shippingTotal);
         }
 
         return $transaction;
@@ -138,13 +146,17 @@ class VertexTransactionBuilder
      *
      * @param \Shopware\Core\Checkout\Customer\CustomerEntity $customer
      * @param \Shopware\Core\Checkout\Customer\Aggregate\CustomerAddress\CustomerAddressEntity|null $billingAddress
+     * @param CustomerAddressEntity $shippingAddress
      * @return array
      */
-    private function buildCustomerData($customer, $billingAddress): array
+    private function buildCustomerData($customer, $billingAddress, CustomerAddressEntity $shippingAddress): array
     {
         $customerData = [
-            'code' => $customer->getCustomerNumber() ?: $customer->getId(),
-            'email' => $customer->getEmail(),
+            'customerCode' => [
+                'classCode' => $customer->getGroup()?->getName() ?? 'B2C',
+                'value' => $customer->getCustomerNumber() ?: $customer->getId(),
+            ],
+            'destination' => $this->buildDestinationAddress($shippingAddress),
         ];
 
         $customFields = $customer->getCustomFields() ?? [];
@@ -178,27 +190,36 @@ class VertexTransactionBuilder
     {
         $lineItems = [];
         $index = 1;
+        $lineItemDiscounts = $this->discountExtractor->getDiscountsPerLineItem($cart);
 
         foreach ($cart->getLineItems()->filterType(LineItem::PRODUCT_LINE_ITEM_TYPE) as $lineItem) {
-            $product = $this->getProduct($lineItem->getReferencedId(), $context);
+            $product              = $this->getProduct($lineItem->getReferencedId(), $context);
+            $allocatedDiscount    = $lineItemDiscounts[$lineItem->getReferencedId()] ?? 0.0;
+            $priceWithoutDiscount = $lineItem->getPrice()->getTotalPrice();
 
             $lineItemData = [
-                'lineItemId' => $lineItem->getId(),
-                'lineItemNumber' => (string)$index++,
+                'lineItemId'     => $lineItem->getId(),
+                'lineItemNumber' => (string) $index++,
+                'customer' => [
+                    'customerCode' => [
+                        'classCode' => $context->getCustomer()?->getGroup()?->getName() ?? 'B2C',
+                        'value' => $context->getCustomer()?->getCustomerNumber() ?: $context->getCustomer()?->getId() ?: 'guest',
+                    ],
+                    'destination' => $this->buildDestinationAddress($this->resolveShippingAddress($cart, $context, $context->getCustomer())),
+                ],
                 'product' => [
-                    'productCode' => $product?->getProductNumber() ?? $lineItem->getReferencedId(),
                     'productClass' => $this->getProductTaxCode($product, $lineItem),
+                    'value' => $product?->getProductNumber() ?? $lineItem->getReferencedId(),
                 ],
                 'quantity' => [
                     'value' => $lineItem->getQuantity(),
-                    'unitOfMeasure' => 'EA',
                 ],
-                'extendedPrice' => $lineItem->getPrice()->getTotalPrice(),
+                'extendedPrice' => ($priceWithoutDiscount - $allocatedDiscount),
             ];
 
-            if ($lineItem->getPrice()->getCalculatedTaxes()->getAmount() < 0) {
+            if ($allocatedDiscount > 0.0) {
                 $lineItemData['discount'] = [
-                    'discountValue' => abs($lineItem->getPrice()->getCalculatedTaxes()->getAmount()),
+                    'discountValue' => $allocatedDiscount,
                 ];
             }
 
@@ -214,23 +235,25 @@ class VertexTransactionBuilder
      * @param Cart $cart
      * @return array
      */
-    private function buildShippingLineItem(Cart $cart): array
+    private function buildShippingLineItem(Cart $cart, ?float $extendedPrice = null): array
     {
-        $shippingCosts = $cart->getShippingCosts();
         $shippingTaxCode = $this->systemConfigService->get('VertexTax.config.shippingTaxCode', $this->salesChannelId) ?? 'FREIGHT';
+        $extendedPrice = $extendedPrice ?? $cart->getShippingCosts()->getTotalPrice();
 
         return [
             'lineItemId' => 'shipping',
             'lineItemNumber' => '999',
+            'seller' => [
+                'physicalOrigin' => $this->buildOriginAddress(),
+            ],
             'product' => [
-                'productCode' => 'SHIPPING',
                 'productClass' => $shippingTaxCode,
+                'value' => 'SHIPPING',
             ],
             'quantity' => [
                 'value' => 1,
-                'unitOfMeasure' => 'EA',
             ],
-            'extendedPrice' => $shippingCosts->getTotalPrice(),
+            'extendedPrice' => $extendedPrice,
         ];
     }
 
@@ -247,7 +270,7 @@ class VertexTransactionBuilder
             'city' => $this->systemConfigService->get('VertexTax.config.originCity', $this->salesChannelId) ?? '',
             'mainDivision' => $this->systemConfigService->get('VertexTax.config.originState', $this->salesChannelId) ?? '',
             'postalCode' => $this->systemConfigService->get('VertexTax.config.originPostalCode', $this->salesChannelId) ?? '',
-            'country' => $this->systemConfigService->get('VertexTax.config.originCountry', $this->salesChannelId) ?? 'USA',
+            'country' => $this->systemConfigService->get('VertexTax.config.originCountry', $this->salesChannelId) ?? 'US',
         ];
     }
 
@@ -264,6 +287,7 @@ class VertexTransactionBuilder
 
         $destination = [
             'streetAddress1' => $address->getStreet(),
+            'streetAddress2' => $address->getAdditionalAddressLine1() ?? '',
             'city' => $address->getCity(),
             'postalCode' => $address->getZipcode() ?? '',
             'country' => $this->normalizeCountryCode($country?->getIso() ?? 'US'),
@@ -321,11 +345,11 @@ class VertexTransactionBuilder
         }
 
         try {
-            /** @var ProductEntity|null $product */
             $product = $this->productRepository
                 ->search(new Criteria([$productId]), $context->getContext())
                 ->get($productId);
-            return $product;
+
+            return $product instanceof ProductEntity ? $product : null;
         } catch (\Exception $e) {
             return null;
         }
@@ -412,8 +436,7 @@ class VertexTransactionBuilder
         ?CustomerEntity $customer
     ): ?CustomerAddressEntity {
         $shippingLocation = $context->getShippingLocation();
-        /* @phpstan-ignore-next-line */
-        if ($shippingLocation && $shippingLocation->getAddress()) {
+        if ($shippingLocation->getAddress()) {
             return $shippingLocation->getAddress();
         }
 
@@ -428,8 +451,7 @@ class VertexTransactionBuilder
         }
 
         $deliveries = $cart->getDeliveries();
-        /* @phpstan-ignore-next-line */
-        if ($deliveries && $deliveries->count() > 0) {
+        if ($deliveries->count() > 0) {
             $deliveryAddress = $deliveries->getAddresses()->first();
             if ($deliveryAddress instanceof CustomerAddressEntity) {
                 return $deliveryAddress;

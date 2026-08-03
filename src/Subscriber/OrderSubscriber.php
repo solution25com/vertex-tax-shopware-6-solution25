@@ -5,44 +5,55 @@ declare(strict_types=1);
 namespace VertexTax\Subscriber;
 
 use Psr\Log\LoggerInterface;
+use Shopware\Core\Checkout\Cart\Cart;
 use Shopware\Core\Checkout\Cart\Event\CheckoutOrderPlacedEvent;
+use Shopware\Core\Checkout\Cart\Tax\Struct\CalculatedTaxCollection;
 use Shopware\Core\Checkout\Order\Event\OrderStateMachineStateChangeEvent;
 use Shopware\Core\Checkout\Order\OrderEntity;
 use Shopware\Core\Framework\Context;
 use Shopware\Core\Framework\DataAbstractionLayer\EntityRepository;
 use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
+use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\System\SystemConfig\SystemConfigService;
+use Shopware\Storefront\Page\Checkout\Cart\CheckoutCartPageLoadedEvent;
+use Shopware\Storefront\Page\Checkout\Confirm\CheckoutConfirmPageLoadedEvent;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use VertexTax\Exception\VertexApiException;
 use VertexTax\Service\Api\VertexApiClient;
 use VertexTax\Service\Builder\VertexTransactionBuilder;
+use VertexTax\Service\Cart\CartPromotionDiscountExtractor;
+use VertexTax\Service\Log\TaxLogWriter;
 
 class OrderSubscriber implements EventSubscriberInterface
 {
     public const ORDER_CREATE_REQUEST_TYPE = 'Order Create Transaction';
     public const ORDER_REFUND_REQUEST_TYPE = 'Order Refund Transaction';
     public const ORDER_CANCEL_REQUEST_TYPE = 'Order Cancel Transaction';
+    public const ORDER_SHIPPED_REQUEST_TYPE = 'Order Shipped Transaction';
 
     private SystemConfigService $systemConfigService;
-    private EntityRepository $taxLogRepository;
+    private TaxLogWriter $taxLogWriter;
     private EntityRepository $orderRepository;
     private VertexApiClient $apiClient;
     private VertexTransactionBuilder $transactionBuilder;
+    private CartPromotionDiscountExtractor $discountExtractor;
     private LoggerInterface $logger;
 
     public function __construct(
         SystemConfigService $systemConfigService,
-        EntityRepository $taxLogRepository,
+        TaxLogWriter $taxLogWriter,
         EntityRepository $orderRepository,
         VertexApiClient $apiClient,
         VertexTransactionBuilder $transactionBuilder,
+        CartPromotionDiscountExtractor $discountExtractor,
         LoggerInterface $logger
     ) {
         $this->systemConfigService = $systemConfigService;
-        $this->taxLogRepository = $taxLogRepository;
+        $this->taxLogWriter = $taxLogWriter;
         $this->orderRepository = $orderRepository;
         $this->apiClient = $apiClient;
         $this->transactionBuilder = $transactionBuilder;
+        $this->discountExtractor = $discountExtractor;
         $this->logger = $logger;
     }
 
@@ -50,9 +61,119 @@ class OrderSubscriber implements EventSubscriberInterface
     {
         return [
             CheckoutOrderPlacedEvent::class => 'onOrderPlaced',
+            'state_enter.order_transaction.state.paid' => 'onOrderPaid',
             'state_enter.order_transaction.state.cancelled' => 'onOrderCancelled',
             'state_enter.order_transaction.state.refunded' => 'onOrderRefunded',
+            'state_enter.order_delivery.state.shipped' => 'onDeliveryShipped',
+            CheckoutCartPageLoadedEvent::class => 'onStorefrontCartLoaded',
+            CheckoutConfirmPageLoadedEvent::class => 'onStorefrontCartLoaded',
         ];
+    }
+
+    public function onStorefrontCartLoaded($event): void
+    {
+        $this->removeEmptyZeroTaxRow($event->getPage()->getCart());
+    }
+
+    private function removeEmptyZeroTaxRow(Cart $cart): void
+    {
+        if (!$this->cartHasVertexTax($cart)) {
+            return;
+        }
+
+        $taxes = $cart->getPrice()->getCalculatedTaxes();
+
+        $hasRealRate = false;
+        foreach ($taxes as $tax) {
+            if ($tax->getTaxRate() > 0.0) {
+                $hasRealRate = true;
+                break;
+            }
+        }
+        if (!$hasRealRate) {
+            return;
+        }
+
+        foreach ($taxes->getElements() as $tax) {
+            if (\abs($tax->getTaxRate()) < 0.0001 && \abs($tax->getTax()) < 0.0001) {
+                $taxes->removeElement($tax);
+            }
+        }
+    }
+
+    private function cartHasVertexTax(Cart $cart): bool
+    {
+        foreach ($cart->getLineItems() as $lineItem) {
+            $rate = $lineItem->getPayloadValue('vertexTaxRate');
+            if ($rate !== null && (float) $rate > 0.0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function stripZeroTaxFromOrder(OrderEntity $order, Context $context): void
+    {
+        $payload = ['id' => $order->getId()];
+        $changed = false;
+
+        $price = $order->getPrice();
+        if ($this->removeEmptyZeroTax($price->getCalculatedTaxes(), true)) {
+            $payload['price'] = $price;
+            $changed = true;
+        }
+
+        $deliveryPayload = [];
+        foreach ($order->getDeliveries() ?? [] as $delivery) {
+            $costs = $delivery->getShippingCosts();
+            if ($this->removeEmptyZeroTax($costs->getCalculatedTaxes(), false)) {
+                $deliveryPayload[] = ['id' => $delivery->getId(), 'shippingCosts' => $costs];
+                $changed = true;
+            }
+        }
+        if ($deliveryPayload !== []) {
+            $payload['deliveries'] = $deliveryPayload;
+        }
+
+        if (!$changed) {
+            return;
+        }
+
+        try {
+            $this->orderRepository->update([$payload], $context);
+        } catch (\Throwable $e) {
+            $this->logger->error('Vertex: Failed to strip 0% tax from order', [
+                'order_id' => $order->getId(),
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function removeEmptyZeroTax(CalculatedTaxCollection $taxes, bool $requireRealRate): bool
+    {
+        if ($requireRealRate) {
+            $hasRealRate = false;
+            foreach ($taxes as $tax) {
+                if ($tax->getTaxRate() > 0.0) {
+                    $hasRealRate = true;
+                    break;
+                }
+            }
+            if (!$hasRealRate) {
+                return false;
+            }
+        }
+
+        $removed = false;
+        foreach ($taxes->getElements() as $tax) {
+            if (\abs($tax->getTaxRate()) < 0.0001 && \abs($tax->getTax()) < 0.0001) {
+                $taxes->removeElement($tax);
+                $removed = true;
+            }
+        }
+
+        return $removed;
     }
 
     /**
@@ -66,46 +187,17 @@ class OrderSubscriber implements EventSubscriberInterface
         $order = $event->getOrder();
         $context = $event->getContext();
 
-        $hasVertexTax = false;
-        $totalVertexTax = 0.0;
+        $marked = $this->markOrderWithVertexTax($order, $context);
 
-        foreach ($order->getLineItems() as $lineItem) {
-            $payload = $lineItem->getPayload();
-            if (isset($payload['vertex_tax_calculated']) && $payload['vertex_tax_calculated'] === true) {
-                $hasVertexTax = true;
-                $lineItemTaxes = $lineItem->getPrice()->getCalculatedTaxes();
-                foreach ($lineItemTaxes as $tax) {
-                    $totalVertexTax += $tax->getTax();
-                }
-            }
-        }
-
-        $shippingCosts = $order->getShippingCosts();
-        /* @phpstan-ignore-next-line */
-        if ($shippingCosts) {
-            $shippingTaxes = $shippingCosts->getCalculatedTaxes();
-            foreach ($shippingTaxes as $tax) {
-                if ($tax->getTax() > 0) {
-                    $hasVertexTax = true;
-                    $totalVertexTax += $tax->getTax();
-                }
-            }
-        }
-
-        if (!$hasVertexTax) {
+        if ($marked === null) {
             return;
         }
 
-        $this->orderRepository->update([[
-            'id' => $order->getId(),
-            'customFields' => array_merge(
-                $order->getCustomFields() ?? [],
-                [
-                    'vertex_tax_calculated' => true,
-                    'vertex_total_tax' => $totalVertexTax,
-                ]
-            ),
-        ]], $context);
+        $this->stripZeroTaxFromOrder($order, $context);
+
+        if ($marked['status'] !== 'success') {
+            return;
+        }
 
         $commitFlow = $this->systemConfigService->get(
             'VertexTax.config.commitFlow',
@@ -142,6 +234,64 @@ class OrderSubscriber implements EventSubscriberInterface
         $this->reverseTransaction($order, $event->getContext());
     }
 
+    public function onOrderPaid(OrderStateMachineStateChangeEvent $event): void
+    {
+        $order = $event->getOrder();
+        $context = $event->getContext();
+
+        $marked = $this->markOrderWithVertexTax($order, $context);
+
+        if ($marked === null || $marked['status'] !== 'success') {
+            return;
+        }
+
+        $commitFlow = $this->systemConfigService->get(
+            'VertexTax.config.commitFlow',
+            $order->getSalesChannelId()
+        );
+
+        if ($commitFlow !== 'paid') {
+            return;
+        }
+
+        $reloaded = $this->getOrder($event->getOrderId(), $context) ?? $order;
+        $custom = $reloaded->getCustomFields() ?? [];
+        if (!empty($custom['vertex_pending_commit']) && empty($custom['vertex_committed'])) {
+            $this->commitTransaction($reloaded, $context);
+        }
+    }
+
+    public function onDeliveryShipped(OrderStateMachineStateChangeEvent $event): void
+    {
+        $context = $event->getContext();
+        $order = $this->getOrder($event->getOrderId(), $context);
+        if (!$order) {
+            return;
+        }
+
+        $marked = $this->markOrderWithVertexTax($order, $context);
+
+        if ($marked === null || $marked['status'] !== 'success') {
+            return;
+        }
+
+        $commitFlow = $this->systemConfigService->get(
+            'VertexTax.config.commitFlow',
+            $order->getSalesChannelId()
+        );
+
+        if ($commitFlow !== 'shipped') {
+            return;
+        }
+
+        $reloaded = $this->getOrder($event->getOrderId(), $context) ?? $order;
+        $custom = $reloaded->getCustomFields() ?? [];
+        if (!empty($custom['vertex_pending_commit'])) {
+            $this->commitTransaction($reloaded, $context);
+        }
+    }
+
+
     /**
      * Handle order refunded event - reverse transaction
      *
@@ -169,25 +319,36 @@ class OrderSubscriber implements EventSubscriberInterface
     private function commitTransaction(OrderEntity $order, Context $context): void
     {
         try {
+            // Reload order with required associations so line item products and addresses are available
+            $loadedOrder = $this->getOrder($order->getId(), $context);
+            if ($loadedOrder !== null) {
+                $order = $loadedOrder;
+            }
+
             $this->apiClient->setSalesChannelId($order->getSalesChannelId());
             $this->transactionBuilder->setSalesChannelId($order->getSalesChannelId());
 
-            $transactionRequest = $this->buildTransactionFromOrder($order, 'Invoice');
+            $transactionRequest = $this->buildTransactionFromOrder($order, 'INVOICE', $context);
 
             $response = $this->apiClient->post('supplies', $transactionRequest);
 
-            $transactionId = $response['data']['transaction']['transactionId'] ?? null;
+            $transactionId = $response['data']['transactionId'] ?? null;
+            $documentNumber = $response['data']['documentNumber'] ?? ($transactionRequest['documentNumber'] ?? null);
+
+            $vertexUpdates = [];
+            if ($documentNumber !== null && $documentNumber !== '') {
+                $vertexUpdates['vertex_sequence'] = (string) $documentNumber;
+            }
             if ($transactionId) {
+                $vertexUpdates['vertex_transaction_id'] = $transactionId;
+                $vertexUpdates['vertex_committed'] = true;
+                $vertexUpdates['vertex_pending_commit'] = false;
+            }
+
+            if ($vertexUpdates !== []) {
                 $this->orderRepository->update([[
                     'id' => $order->getId(),
-                    'customFields' => array_merge(
-                        $order->getCustomFields() ?? [],
-                        [
-                            'vertex_transaction_id' => $transactionId,
-                            'vertex_committed' => true,
-                            'vertex_pending_commit' => false,
-                        ]
-                    ),
+                    'customFields' => array_merge($order->getCustomFields() ?? [], $vertexUpdates),
                 ]], $context);
             }
 
@@ -212,7 +373,7 @@ class OrderSubscriber implements EventSubscriberInterface
         try {
             $customFields = $order->getCustomFields() ?? [];
             $transactionId = $customFields['vertex_transaction_id'] ?? null;
-
+//
             if (!$transactionId) {
                 $this->logger->warning('Vertex: No transaction ID found for reversal', [
                     'order_id' => $order->getId(),
@@ -223,10 +384,12 @@ class OrderSubscriber implements EventSubscriberInterface
             $this->apiClient->setSalesChannelId($order->getSalesChannelId());
             $this->transactionBuilder->setSalesChannelId($order->getSalesChannelId());
 
-            $reversalRequest = $this->buildTransactionFromOrder($order, 'DistributeTax');
-            $reversalRequest['transactionId'] = $transactionId . '_reversal';
+            $reversalRequest = $this->buildReversalRequest($order, $transactionId);
 
-            $response = $this->apiClient->post('supplies', $reversalRequest);
+            $response = $this->apiClient->post(
+                'transactions/' . $transactionId . '/reversal',
+                $reversalRequest
+            );
 
             $this->logTransaction($order, $reversalRequest, $response, self::ORDER_REFUND_REQUEST_TYPE, $context);
         } catch (VertexApiException $e) {
@@ -242,115 +405,129 @@ class OrderSubscriber implements EventSubscriberInterface
      *
      * @param OrderEntity $order
      * @param string $messageType
+     * @param Context $context
      * @return array
      */
-    private function buildTransactionFromOrder(OrderEntity $order, string $messageType): array
+    private function buildTransactionFromOrder(OrderEntity $order, string $messageType, Context $context): array
     {
         $salesChannelId = $order->getSalesChannelId();
         $this->transactionBuilder->setSalesChannelId($salesChannelId);
 
-        $orderCustomer = $order->getOrderCustomer();
         $delivery = $order->getDeliveries()->first();
         $shippingAddress = $delivery?->getShippingOrderAddress() ?? $order->getBillingAddress();
-        $billingAddress = $order->getBillingAddress();
+//        $billingAddress = $order->getBillingAddress();
 
         if (!$shippingAddress) {
             throw new \RuntimeException('Shipping address is required for tax calculation');
         }
 
         $transaction = [
-            'saleMessageType' => 'QUOTATION',
-            'transactionId' => $this->generateOrderTransactionId($order),
-            'transactionDate' => $order->getOrderDateTime()->format('Y-m-d'),
-//            'currency' => $order->getCurrency()->getIsoCode(),
-            'currency' => 'USD',
-            'companyCode' => $this->systemConfigService->get(
-                'VertexTax.config.companyCode',
-                $salesChannelId
-            ) ?? 'DEFAULT',
+            'saleMessageType' => $messageType,
+            'transactionType' => 'SALE',
+            'documentNumber' => $order->getOrderNumber() ?? ('SW-ORDER-' . $order->getId()),
+            'transactionId' => Uuid::randomHex(),
+            'documentDate' => date('Y-m-d'),
+            'seller' => [
+                'company' => $this->systemConfigService->get('VertexTax.config.companyCode') ?? 'DEFAULT',
+            ]
         ];
-
-        if ($orderCustomer) {
-            $transaction['customer'] = [
-                'code' => $orderCustomer->getCustomerNumber() ?: $orderCustomer->getCustomerId(),
-                'email' => $orderCustomer->getEmail(),
-            ];
-
-            $customFields = $orderCustomer->getCustomFields() ?? [];
-            if (isset($customFields['vertex_vat_id']) && !empty($customFields['vertex_vat_id'])) {
-                $transaction['customer']['taxRegistrations'] = [
-                    [
-                        'taxRegistrationNumber' => $customFields['vertex_vat_id'],
-                        'hasPhysicalPresenceIndicator' => true,
-                    ],
-                ];
-            }
-        }
 
         $transaction['lineItems'] = [];
         $index = 1;
+        $country = $shippingAddress->getCountry();
+        $lineItemDiscounts = $this->discountExtractor->getDiscountsFromLineItems($order->getLineItems());
         foreach ($order->getLineItems() as $lineItem) {
-            $product = $lineItem->getProduct();
-            $customFields = $product?->getCustomFields() ?? [];
+            if ($lineItem->getType() !== "product") {
+                continue;
+            }
+
+            $customFields = $lineItem->getCustomFields() ?? [];
             $taxCode = $customFields['vertex_tax_code']
                 ?? $this->systemConfigService->get('VertexTax.config.defaultTaxCode', $salesChannelId)
                 ?? 'DEFAULT';
+
+            $allocatedDiscount = $lineItemDiscounts[$lineItem->getReferencedId()] ?? 0.0;
+            $grossExtended     = $lineItem->getUnitPrice() * $lineItem->getQuantity();
 
             $transaction['lineItems'][] = [
                 'lineItemId' => $lineItem->getId(),
                 'lineItemNumber' => (string)$index++,
                 'product' => [
-                    'productCode' => $product?->getProductNumber() ?? $lineItem->getProductId(),
                     'productClass' => $taxCode,
                 ],
                 'quantity' => [
                     'value' => $lineItem->getQuantity(),
                     'unitOfMeasure' => 'EA',
                 ],
-                'extendedPrice' => $lineItem->getUnitPrice() * $lineItem->getQuantity(),
+                'extendedPrice' => ($grossExtended - $allocatedDiscount),
+                'customer' => [
+                    'customerCode' => [
+                        'classCode' => $order->getOrderCustomer()->getCustomer()?->getGroup()?->getName() ?? 'B2C',
+                        'value' => $order->getOrderCustomer()?->getCustomer()?->getCustomerNumber() ?? 'CUST-TEST-1'
+                    ],
+                    'destination' => [
+                        'streetAddress1' => $shippingAddress->getStreet(),
+                        'city' => $shippingAddress->getCity(),
+                        'postalCode' => $shippingAddress->getZipcode(),
+                        'country' => $this->normalizeCountryCode($country?->getIso() ?? 'US'),
+                    ]
+                ]
             ];
         }
 
-        if ($order->getShippingTotal() > 0) {
+        $shippingTotal = $order->getShippingCosts()->getTotalPrice();
+        if ($shippingTotal > 0) {
             $shippingTaxCode = $this->systemConfigService->get('VertexTax.config.shippingTaxCode', $salesChannelId) ?? 'FREIGHT';
             $transaction['lineItems'][] = [
                 'lineItemId' => 'shipping',
                 'lineItemNumber' => '999',
                 'product' => [
-                    'productCode' => 'SHIPPING',
                     'productClass' => $shippingTaxCode,
                 ],
                 'quantity' => [
                     'value' => 1,
                     'unitOfMeasure' => 'EA',
                 ],
-                'extendedPrice' => $order->getShippingTotal(),
+                'extendedPrice' => $shippingTotal,
+                'customer' => [
+                    'customerCode' => [
+                        'classCode' => $order->getOrderCustomer()->getCustomer()?->getGroup()?->getName() ?? 'B2C',
+                        'value' => $order->getOrderCustomer()?->getCustomer()?->getCustomerNumber() ?? 'CUST-TEST-1'
+                    ],
+                    'destination' => [
+                        'streetAddress1' => $shippingAddress->getStreet(),
+                        'city' => $shippingAddress->getCity(),
+                        'postalCode' => $shippingAddress->getZipcode(),
+                        'country' => $this->normalizeCountryCode($country?->getIso() ?? 'US'),
+                    ]
+                ]
             ];
         }
 
-        $transaction['origin'] = [
-            'streetAddress1' => $this->systemConfigService->get('VertexTax.config.originStreet1', $salesChannelId) ?? '',
-            'streetAddress2' => $this->systemConfigService->get('VertexTax.config.originStreet2', $salesChannelId) ?? '',
-            'city' => $this->systemConfigService->get('VertexTax.config.originCity', $salesChannelId) ?? '',
-            'mainDivision' => $this->systemConfigService->get('VertexTax.config.originState', $salesChannelId) ?? '',
-            'postalCode' => $this->systemConfigService->get('VertexTax.config.originPostalCode', $salesChannelId) ?? '',
-            'country' => $this->systemConfigService->get('VertexTax.config.originCountry', $salesChannelId) ?? 'USA',
-        ];
-
-        $country = $shippingAddress->getCountry();
-        $state = $shippingAddress->getCountryState();
-        $transaction['destination'] = [
-            'streetAddress1' => $shippingAddress->getStreet(),
-            'city' => $shippingAddress->getCity(),
-            'postalCode' => $shippingAddress->getZipcode() ?? '',
-            'country' => $this->normalizeCountryCode($country?->getIso() ?? 'US'),
-        ];
-
-        if ($state) {
-            $transaction['destination']['mainDivision'] = $this->normalizeStateCode($state->getShortCode());
-        }
-
         return $transaction;
+    }
+
+    /**
+     * Build reversal payload for Vertex /v2/transactions/{id}/reversal
+     *
+     * @param OrderEntity $order
+     * @param string $originalTransactionId
+     * @return array
+     */
+    private function buildReversalRequest(
+        OrderEntity $order,
+        string $originalTransactionId,
+    ): array {
+        $postingDate = $order->getCreatedAt()?->format('Y-m-d') ?? date('Y-m-d');
+        $documentNumber = $order->getOrderNumber() ?? ('SW-ORDER-' . $order->getId());
+
+        return [
+            'data' => [
+                'transactionId' => $originalTransactionId,
+                'postingDate' => $postingDate,
+                'documentNumber' => $documentNumber,
+            ],
+        ];
     }
 
     /**
@@ -370,24 +547,11 @@ class OrderSubscriber implements EventSubscriberInterface
         return $countryMap[strtoupper($countryCode)] ?? strtoupper($countryCode);
     }
 
-    /**
-     * Normalize state code
-     *
-     * @param string $stateCode
-     * @return string
-     */
-    private function normalizeStateCode(string $stateCode): string
-    {
-        if (strpos($stateCode, '-') !== false) {
-            $parts = explode('-', $stateCode);
-            return strtoupper(end($parts));
-        }
 
-        return strtoupper(trim($stateCode));
-    }
+
 
     /**
-     * Check if order uses Vertex tax
+     * Whether the order was successfully calculated by Vertex (not fallback). Commit/reverse only in this case.
      *
      * @param OrderEntity $order
      * @return bool
@@ -395,7 +559,109 @@ class OrderSubscriber implements EventSubscriberInterface
     private function hasVertexTax(OrderEntity $order): bool
     {
         $customFields = $order->getCustomFields() ?? [];
+
         return isset($customFields['vertex_tax_calculated']) && $customFields['vertex_tax_calculated'] === true;
+    }
+
+    /**
+     * Calculate and persist Vertex tax metadata on the order.
+     *
+     * @param OrderEntity $order
+     * @param Context $context
+     * @return float|null Total Vertex tax, or null when no Vertex tax is present
+     */
+    /**
+     * @return array{total: float, status: 'success'|'failed'}|null null when the order is not under Vertex
+     */
+    private function markOrderWithVertexTax(OrderEntity $order, Context $context): ?array
+    {
+        $result = $this->calculateVertexTaxTotals($order);
+
+        if ($result['status'] === 'none') {
+            return null;
+        }
+
+        $base = $order->getCustomFields() ?? [];
+        if ($result['status'] === 'success') {
+            $customFields = \array_merge($base, [
+                'vertex_tax_calculated' => true,
+                'vertex_total_tax' => $result['total'],
+                'vertex_fallback_used' => false,
+                'vertex_error' => '',
+            ]);
+        } else {
+            $customFields = \array_merge($base, [
+                'vertex_tax_calculated' => 'failed',
+                'vertex_total_tax' => $result['total'],
+                'vertex_fallback_used' => true,
+                'vertex_error' => $result['error'] ?? 'unknown',
+            ]);
+        }
+
+        $this->orderRepository->update([[
+            'id' => $order->getId(),
+            'customFields' => $customFields,
+        ]], $context);
+
+        return [
+            'total' => $result['total'],
+            'status' => $result['status'],
+        ];
+    }
+
+    /**
+     * @return array{status: 'none'|'success'|'failed', total: float, error: string|null}
+     */
+    private function calculateVertexTaxTotals(OrderEntity $order): array
+    {
+        $anySuccess = false;
+        $anyFallback = false;
+        $error = null;
+        $totalTax = 0.0;
+
+        foreach ($order->getLineItems() as $lineItem) {
+            $payload = $lineItem->getPayload() ?? [];
+            if (!empty($payload['vertex_fallback_used'])) {
+                $anyFallback = true;
+                if (isset($payload['vertex_error']) && $payload['vertex_error'] !== '') {
+                    $error = (string) $payload['vertex_error'];
+                }
+                $lineItemTaxes = $lineItem->getPrice()->getCalculatedTaxes();
+                foreach ($lineItemTaxes as $tax) {
+                    $totalTax += $tax->getTax();
+                }
+            } elseif (isset($payload['vertex_tax_calculated']) && $payload['vertex_tax_calculated'] === true) {
+                $anySuccess = true;
+                $lineItemTaxes = $lineItem->getPrice()->getCalculatedTaxes();
+                foreach ($lineItemTaxes as $tax) {
+                    $totalTax += $tax->getTax();
+                }
+            }
+        }
+
+        $shippingCosts = $order->getShippingCosts();
+        if ($anySuccess || $anyFallback) {
+            foreach ($shippingCosts->getCalculatedTaxes() as $tax) {
+                $totalTax += $tax->getTax();
+            }
+        } else {
+            foreach ($shippingCosts->getCalculatedTaxes() as $tax) {
+                if ($tax->getTax() > 0) {
+                    $anySuccess = true;
+                    $totalTax += $tax->getTax();
+                }
+            }
+        }
+
+        if (!$anySuccess && !$anyFallback) {
+            return ['status' => 'none', 'total' => 0.0, 'error' => null];
+        }
+
+        if ($anyFallback) {
+            return ['status' => 'failed', 'total' => $totalTax, 'error' => $error];
+        }
+
+        return ['status' => 'success', 'total' => $totalTax, 'error' => null];
     }
 
     /**
@@ -413,9 +679,9 @@ class OrderSubscriber implements EventSubscriberInterface
             $criteria->addAssociation('deliveries.shippingOrderAddress');
             $criteria->addAssociation('billingAddress');
 
-            /** @var OrderEntity $order */
             $order = $this->orderRepository->search($criteria, $context)->get($orderId);
-            return $order;
+
+            return $order instanceof OrderEntity ? $order : null;
         } catch (\Exception $e) {
             $this->logger->error('Vertex: Failed to load order', [
                 'order_id' => $orderId,
@@ -423,22 +689,6 @@ class OrderSubscriber implements EventSubscriberInterface
             ]);
             return null;
         }
-    }
-
-    /**
-     * Generate transaction ID for order
-     *
-     * @param OrderEntity $order
-     * @return string
-     */
-    private function generateOrderTransactionId(OrderEntity $order): string
-    {
-        $prefix = $this->systemConfigService->get(
-            'VertexTax.config.transactionIdPrefix',
-            $order->getSalesChannelId()
-        ) ?? 'SW';
-
-        return $prefix . '_' . $order->getOrderNumber();
     }
 
     /**
@@ -472,12 +722,6 @@ class OrderSubscriber implements EventSubscriberInterface
             'orderId' => $order->getId(),
         ];
 
-        try {
-            $this->taxLogRepository->create([$logData], $context);
-        } catch (\Exception $e) {
-            $this->logger->error('Vertex: Failed to log transaction', [
-                'error' => $e->getMessage(),
-            ]);
-        }
+        $this->taxLogWriter->write($logData, $context);
     }
 }

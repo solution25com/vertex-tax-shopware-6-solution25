@@ -4,20 +4,12 @@ declare(strict_types=1);
 
 namespace VertexTax\Service\Address;
 
-use Psr\Log\LoggerInterface;
 use Shopware\Core\Checkout\Customer\Aggregate\CustomerAddress\CustomerAddressEntity;
 use Shopware\Core\System\Country\CountryEntity;
 use Shopware\Core\System\Country\Aggregate\CountryState\CountryStateEntity;
 
 class AddressValidatorService
 {
-    private LoggerInterface $logger;
-
-    public function __construct(LoggerInterface $logger)
-    {
-        $this->logger = $logger;
-    }
-
     /**
      * Validate address for Vertex tax calculation
      *
@@ -51,7 +43,6 @@ class AddressValidatorService
                 } else {
                     $stateCode = $this->normalizeStateCode($state->getShortCode());
                     if (empty($stateCode) || strlen($stateCode) !== 2) {
-                        $this->logger->warning('Invalid state code for US address', ['stateCode' => $stateCode]);
                         $errors[] = 'Valid state code is required (2-letter abbreviation)';
                     }
                 }

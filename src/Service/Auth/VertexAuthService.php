@@ -84,7 +84,7 @@ class VertexAuthService
 
             $requestParams = [
             'grant_type' => $grantType,
-    //        'audience' => 'verx://migration-api',
+            'audience' => 'verx://migration-api',
             ];
 
             $authHeader = 'Basic ' . base64_encode($credentials['client_id'] . ':' . $credentials['client_secret']);
@@ -160,7 +160,7 @@ class VertexAuthService
         $environment = $this->systemConfigService->get('VertexTax.config.environment', $this->salesChannelId) ?? 'production';
 
         if ($environment === 'sandbox') {
-            return 'https://auth.vertexcloud.com/oauth/token';
+            return 'https://tokenguard.vertexcloud.com/cached/oauth/token';
         }
 
         $productionBaseUrl = $this->systemConfigService->get('VertexTax.config.productionBaseUrl', $this->salesChannelId);
