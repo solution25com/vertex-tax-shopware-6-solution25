@@ -1,0 +1,9 @@
+monolog:
+    channels: ['vertex_tax']
+    handlers:
+        vertex_tax:
+            type: rotating_file
+            path: "%kernel.logs_dir%/vertex_tax_%kernel.environment%.log"
+            max_files: 14
+            level: debug
+            channels: ["vertex_tax"]
