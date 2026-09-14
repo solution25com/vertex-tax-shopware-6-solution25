@@ -3,6 +3,19 @@
            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
            xsi:schemaLocation="http://symfony.com/schema/dic/services http://symfony.com/schema/dic/services/services-1.0.xsd">
     <services>
+        <!-- Vertex Tax File Logger -->
+        <service id="vertex_tax.log_handler" class="Monolog\Handler\RotatingFileHandler">
+            <argument>%kernel.logs_dir%/vertex_tax_%kernel.environment%.log</argument>
+            <argument>14</argument><!-- max files -->
+        </service>
+
+        <service id="monolog.logger.vertex_tax" class="Monolog\Logger">
+            <argument>vertex_tax</argument>
+            <call method="pushHandler">
+                <argument type="service" id="vertex_tax.log_handler"/>
+            </call>
+        </service>
+
         <!-- Entity Definitions -->
         <service id="VertexTax\Core\Content\TaxProvider\TaxProviderDefinition">
             <tag name="shopware.entity.definition" entity="vertex_tax_provider"/>
@@ -27,7 +40,7 @@
 
         <service id="VertexTax\Service\Log\TaxLogWriter">
             <argument type="service" id="vertex_tax_log.repository" />
-            <argument type="service" id="logger"/>
+            <argument type="service" id="monolog.logger.vertex_tax"/>
         </service>
 
         <!-- Tax Calculator -->
@@ -37,7 +50,7 @@
             <argument type="service" id="cache.object"/>
             <argument type="service" id="VertexTax\Service\Api\VertexApiClient"/>
             <argument type="service" id="VertexTax\Service\Builder\VertexTransactionBuilder"/>
-            <argument type="service" id="logger"/>
+            <argument type="service" id="monolog.logger.vertex_tax"/>
             <tag name="vertex.tax_calculator"/>
         </service>
 
@@ -50,13 +63,13 @@
         <service id="VertexTax\Service\Auth\VertexAuthService">
             <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
             <argument type="service" id="cache.object"/>
-            <argument type="service" id="logger"/>
+            <argument type="service" id="monolog.logger.vertex_tax"/>
         </service>
 
         <service id="VertexTax\Service\Api\VertexApiClient">
             <argument type="service" id="VertexTax\Service\Auth\VertexAuthService"/>
             <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
-            <argument type="service" id="logger"/>
+            <argument type="service" id="monolog.logger.vertex_tax"/>
         </service>
 
         <!-- Cart Promotion Discount Extractor -->
@@ -75,7 +88,7 @@
         <!-- Delivery State -->
         <service id="VertexTax\Service\Order\DeliveryStateTransitionService">
             <argument type="service" id="state_machine.registry"/>
-            <argument type="service" id="logger"/>
+            <argument type="service" id="monolog.logger.vertex_tax"/>
         </service>
 
         <!-- Event Subscribers -->
@@ -87,7 +100,7 @@
             <argument type="service" id="VertexTax\Service\Api\VertexApiClient"/>
             <argument type="service" id="VertexTax\Service\Builder\VertexTransactionBuilder"/>
             <argument type="service" id="VertexTax\Service\Cart\CartPromotionDiscountExtractor"/>
-            <argument type="service" id="logger"/>
+            <argument type="service" id="monolog.logger.vertex_tax"/>
         </service>
 
         <!-- Controllers -->
