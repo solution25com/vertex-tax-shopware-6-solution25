@@ -1,7 +1,7 @@
 {
     "name": "solution25/vertex-tax-shopware-6",
     "description": "Vertex O Series REST API v2 integration for Shopware 6.7 that enables real-time US sales tax calculation, shipping tax handling, and address validation in checkout and order flows.",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "type": "shopware-platform-plugin",
     "license": "MIT",
     "authors": [
