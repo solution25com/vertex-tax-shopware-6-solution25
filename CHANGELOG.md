@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Vertex Tax Integration plugin will be documented in this file.
 
+## [1.1.1] - 2026-09-15
+
+### Added
+- Dedicated logging for the Vertex Tax plugin: logs are now written to a separate rotating log file instead of Shopware's general `dev.log`, making it easier to locate and troubleshoot Vertex-specific issues. Old log files are automatically cleaned up after 14 days.
+
 ## [1.1.0] - 2026-08-03
 
 ### This release includes
