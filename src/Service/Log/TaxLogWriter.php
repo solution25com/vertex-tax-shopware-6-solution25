@@ -89,7 +89,7 @@ class TaxLogWriter
         $criteria->setLimit(1);
 
         /** @var \VertexTax\Core\Content\TaxLog\TaxLogEntity|null $match */
-        $match = $this->taxLogRepository->search($criteria, $context)->first();
+        $match = $this->taxLogRepository->search($criteria, $context)->getEntities()->first();
 
         if ($match === null) {
             return null;

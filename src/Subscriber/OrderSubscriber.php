@@ -679,7 +679,7 @@ class OrderSubscriber implements EventSubscriberInterface
             $criteria->addAssociation('deliveries.shippingOrderAddress');
             $criteria->addAssociation('billingAddress');
 
-            $order = $this->orderRepository->search($criteria, $context)->get($orderId);
+            $order = $this->orderRepository->search($criteria, $context)->getEntities()->get($orderId);
 
             return $order instanceof OrderEntity ? $order : null;
         } catch (\Exception $e) {

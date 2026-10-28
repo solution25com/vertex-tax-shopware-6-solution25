@@ -264,14 +264,14 @@ class VertexTransactionBuilder
      */
     private function buildOriginAddress(): array
     {
-        return [
+        return $this->removeEmptyAddressFields([
             'streetAddress1' => $this->systemConfigService->get('VertexTax.config.originStreet1', $this->salesChannelId) ?? '',
             'streetAddress2' => $this->systemConfigService->get('VertexTax.config.originStreet2', $this->salesChannelId) ?? '',
             'city' => $this->systemConfigService->get('VertexTax.config.originCity', $this->salesChannelId) ?? '',
             'mainDivision' => $this->systemConfigService->get('VertexTax.config.originState', $this->salesChannelId) ?? '',
             'postalCode' => $this->systemConfigService->get('VertexTax.config.originPostalCode', $this->salesChannelId) ?? '',
             'country' => $this->systemConfigService->get('VertexTax.config.originCountry', $this->salesChannelId) ?? 'US',
-        ];
+        ]);
     }
 
     /**
@@ -299,7 +299,22 @@ class VertexTransactionBuilder
             $destination['mainDivision'] = $this->extractStateFromAddress($address);
         }
 
-        return $destination;
+        return $this->removeEmptyAddressFields($destination);
+    }
+
+    /**
+     * Vertex rejects empty strings in address fields (HTTP 400 "size must be between 1 and N"),
+     * so fields without a value are left out of the request instead of being sent as ''.
+     *
+     * @param array $address
+     * @return array
+     */
+    private function removeEmptyAddressFields(array $address): array
+    {
+        return array_filter(
+            $address,
+            static fn ($value): bool => $value !== null && trim((string) $value) !== ''
+        );
     }
 
     /**
@@ -347,6 +362,7 @@ class VertexTransactionBuilder
         try {
             $product = $this->productRepository
                 ->search(new Criteria([$productId]), $context->getContext())
+                ->getEntities()
                 ->get($productId);
 
             return $product instanceof ProductEntity ? $product : null;

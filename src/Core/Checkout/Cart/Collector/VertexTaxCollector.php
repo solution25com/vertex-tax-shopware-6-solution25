@@ -64,7 +64,7 @@ class VertexTaxCollector implements CartProcessorInterface
 
         $taxCriteria = new Criteria(array_unique($taxIds));
         $taxCriteria->addAssociation('extensions.taxExtension.taxProvider');
-        $taxRules = $this->taxRepository->search($taxCriteria, $context->getContext())->getElements();
+        $taxRules = $this->taxRepository->search($taxCriteria, $context->getContext())->getEntities()->getElements();
 
         $providerIds = [];
         foreach ($taxRules as $taxRule) {
@@ -77,7 +77,7 @@ class VertexTaxCollector implements CartProcessorInterface
         $taxProviders = [];
         if (!empty($providerIds)) {
             $providerCriteria = new Criteria(array_unique($providerIds));
-            $taxProviders = $this->taxProviderRepository->search($providerCriteria, $context->getContext())->getElements();
+            $taxProviders = $this->taxProviderRepository->search($providerCriteria, $context->getContext())->getEntities()->getElements();
         }
 
         foreach ($taxProviderMapping as $taxId => $requestDetails) {

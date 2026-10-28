@@ -1,0 +1,11 @@
+# Same as the shopware-cli default, set explicitly to avoid the "missing compatibility_date" warning.
+compatibility_date: '2026-02-11'
+
+validation:
+  ignore:
+    # EntitySearchResult carries #[ClassHierarchyChange] for 6.8 (it will stop extending EntityCollection),
+    # so PHPStan reports every method call on it as a call on a deprecated class. getEntities() is declared
+    # on EntitySearchResult itself, stays in 6.8 and is the replacement Shopware recommends for the
+    # deprecated get()/first()/getElements(). Calls to those deprecated methods are still reported.
+    - identifier: phpstan/method.deprecatedClass
+      message: 'Call to method getEntities() of deprecated class Shopware\Core\Framework\DataAbstractionLayer\Search\EntitySearchResult'
