@@ -1,6 +1,19 @@
 # Changelog
 All notable changes to the Vertex Tax Integration plugin will be documented in this file.
 
+## [1.1.2] - 2026-10-28
+
+  ### Fixed
+  - Tax calculation fell back to the fallback tax rate (0% by default) when an
+  address had no second street line, no ZIP code or no state, or when Origin
+  Street Address 2 was not configured and the cart had a shipping cost. Empty
+  address fields are now left out of the Vertex request instead of being sent as
+  empty strings.
+
+  ### Changed
+  - Replaced deprecated `EntitySearchResult` calls with `getEntities()` in
+  preparation for Shopware 6.8.
+
 ## [1.1.1] - 2026-09-15
 
 ### Added
